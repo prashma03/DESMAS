@@ -42,7 +42,7 @@ Connect Arduino is stubbed in this slice; the simulated kit is live.
 | Path | Role |
 | --- | --- |
 | `App.tsx` + `src/` | Expo station UI |
-| `server/` | Private API key, Grok routes (next), Mars delay |
+| `server/` | Express API: live Mars light-time, Grok text route. Voice route goes here too |
 | `firmware/` | Arduino sketch notes and pin map |
 
 Planet textures, when added, should credit Solar System Scope, CC BY 4.0, based on NASA imagery.

@@ -7,3 +7,6 @@ dist
 .expo
 web-build
 .tmp-mockup
+index.html
+src/index.css
+src/main.tsx

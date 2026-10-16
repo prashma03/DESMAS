@@ -2,7 +2,9 @@
   "name": "desmas",
   "private": true,
   "main": "expo/AppEntry.js",
-  "workspaces": ["server"],
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
     "dev": "concurrently -n app,server -c cyan,magenta \"expo start --web\" \"npm run dev -w server\"",
     "start": "expo start",
@@ -12,8 +14,9 @@
     "dev:server": "npm run dev -w server"
   },
   "dependencies": {
+    "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.13",
-    "expo-linear-gradient": "~15.0.7",
+    "expo-linear-gradient": "~15.0.8",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",
