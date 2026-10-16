@@ -203,11 +203,13 @@ function GlobeSlot({
           <PlanetFill kind={id} />
         </Animated.View>
       </Pressable>
-      <View style={{ alignItems: "center", marginTop: 14, width: "100%", opacity: dim ? 0.85 : 1 }}>
-        <Text style={styles.kicker}>{meta.kicker}</Text>
-        <Text numberOfLines={1} style={[styles.name, focused ? { fontSize: narrow ? 22 : 30 } : null]}>{meta.name}</Text>
-        {dim ? null : (
-          <View style={styles.statusRow}>
+      <View style={{ alignItems: "center", marginTop: 14, width: "100%", maxWidth: "100%", opacity: dim ? 0.85 : 1 }}>
+        <Text numberOfLines={1} style={[styles.kicker, { width: "100%", textAlign: "center" }, narrow ? { letterSpacing: 0.2 } : null]}>
+          {narrow ? (id === "earth" ? "Today" : id === "moon" ? "Live" : "Next") : meta.kicker}
+        </Text>
+        <Text numberOfLines={1} style={[styles.name, { width: "100%", textAlign: "center" }, focused ? { fontSize: narrow ? 22 : 30 } : null]}>{meta.name}</Text>
+        {dim || (narrow && !focused) ? null : (
+          <View style={[styles.statusRow, { maxWidth: "100%", justifyContent: "center" }]}>
             <View style={[styles.dot, { backgroundColor: meta.color }]} />
             <Text numberOfLines={2} style={[styles.status, { color: meta.color, textAlign: "center", flexShrink: 1 }]}>{meta.status}</Text>
           </View>

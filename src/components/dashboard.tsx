@@ -417,8 +417,8 @@ export function LedMap({ leds }: { leds: number[] }) {
         {rows.map((row, i) => (
           <View key={row[0]} style={styles.ledCard}>
             <View style={styles.ledCardHead}>
-              <Text style={[styles.mapCell, { color: LEDS[i], flex: 1 }]}>{row[0]}</Text>
-              <Text style={[styles.mapCell, { color: leds[i] > 0 ? colors.ok : colors.dim, flex: 0 }]}>{leds[i] > 0 ? "ON" : "OFF"}</Text>
+              <Text style={[styles.ledName, { color: LEDS[i] }]}>{row[0]}</Text>
+              <Text style={[styles.ledState, { color: leds[i] > 0 ? colors.ok : colors.dim }]}>{leds[i] > 0 ? "ON" : "OFF"}</Text>
             </View>
             <Text style={styles.note}>{`Moon base · ${row[1]}`}</Text>
             <Text style={styles.note}>{`Clinic · ${row[2]}`}</Text>
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "rgba(6,8,12,0.55)",
   },
-  titleBlockNarrow: { left: 12, right: 12, bottom: 12, maxWidth: undefined },
+  titleBlockNarrow: { left: 12, right: 12, bottom: 12, maxWidth: "100%" },
   kicker: {
     color: colors.dim,
     fontFamily: mono,
@@ -696,6 +696,8 @@ const styles = StyleSheet.create({
   mapCell: { flex: 1, minWidth: 0, color: colors.ink, fontSize: 13, fontFamily: sans },
   ledCard: { gap: 2, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.line },
   ledCardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  ledName: { color: colors.ink, fontSize: 14, fontFamily: sans, flexShrink: 1 },
+  ledState: { fontFamily: mono, fontSize: 12, letterSpacing: 0.6 },
   body: { color: colors.ink, fontSize: 15, fontFamily: sans },
   doneRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
   track: { height: 6, borderRadius: 99, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },

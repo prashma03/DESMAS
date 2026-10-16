@@ -58,7 +58,7 @@ export function EarthPage({
 
   return (
     <Page>
-      <View style={[styles.scene, narrow ? { height: 320 } : null]}>
+      <View style={[styles.scene, narrow ? { height: 380 } : null]}>
         <LinearGradient
           colors={night ? ["#1a2744", "#24324a", "#3a4634", "#243024"] : ["#8ec8ef", "#d5eef8", "#c5e2a4", "#6f9a4e"]}
           style={StyleSheet.absoluteFill}
@@ -70,7 +70,7 @@ export function EarthPage({
         <Tree left="6%" />
         <Tree left="14%" />
         <Tree left="78%" />
-        <View style={[styles.clinic, narrow ? { left: "50%", width: clinicW, marginLeft: -clinicW / 2 } : null]}>
+        <View style={[styles.clinic, narrow ? { left: "50%", width: clinicW, marginLeft: -clinicW / 2, bottom: "34%" } : null]}>
           <View style={[styles.roof, narrow ? { width: clinicW } : null]}>
             <View style={styles.panels}>
               {Array.from({ length: 8 }).map((_, i) => (
@@ -87,8 +87,8 @@ export function EarthPage({
             <Text style={styles.signTxt}>CLINIC</Text>
           </View>
         </View>
-        <View style={styles.fanBox} />
-        <View style={styles.tower} />
+        <View style={[styles.fanBox, narrow ? { bottom: "48%" } : null]} />
+        <View style={[styles.tower, narrow ? { height: 90, bottom: "42%" } : null]} />
         <View style={[styles.veil, { opacity: Math.min(0.62, reading.dark / 140) }]} />
         <DayBadge
           label={night ? "Night · on battery" : dusk ? "Sunset · fan off" : "Daylight · solar charging the battery"}
