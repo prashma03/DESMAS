@@ -37,6 +37,8 @@ Then open Android, iOS, or web from the Expo menu.
 
 Connect Arduino is stubbed in this slice; the simulated kit is live.
 
+The AI monitor can speak the current finding (Speak Alert / Stop Voice). On a new humidity alarm it speaks once automatically. That replaces the standalone `index.html` browser voice test.
+
 ## Layout
 
 | Path | Role |

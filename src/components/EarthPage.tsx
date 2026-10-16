@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
+import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { AiMonitor } from "./AIMonitor";
 import {
@@ -10,6 +11,7 @@ import {
   GlassTag,
   KitReadout,
   LedMap,
+  Legend,
   Lower,
   Page,
   PowerBlock,
@@ -38,15 +40,25 @@ export function EarthPage({
   events: KitEvent[];
   source: KitSource;
 }) {
+  const { narrow, width } = useScreen();
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("earth", reading.dark);
   const night = reading.dark >= 55;
   const dusk = !night && reading.dark >= 30;
   const on = (i: number) => reading.leds[i] > 0;
+  const clinicW = narrow ? Math.round(Math.min(210, Math.max(148, width * 0.46))) : 280;
+  const cell = Math.max(8, Math.min(22, Math.floor((clinicW - 28) / 8)));
+  const tags = [
+    { title: "Vaccine fridge", line: on(0) ? "ON · P1 · always" : "OFF · P1", color: colors.green, on: on(0), style: { left: "30%" as const, top: "28%" as const } },
+    { title: "Fan", line: on(3) ? "ON · P4" : "OFF · P4", color: colors.ledRed, on: on(3), style: { right: "24%" as const, top: "34%" as const } },
+    { title: "Battery", line: `Estimate · ${battery}%`, color: colors.gold, on: true, style: { right: "18%" as const, top: "52%" as const } },
+    { title: "Lights", line: on(2) ? "ON · P3" : "OFF · P3", color: colors.ledYellow, on: on(2), style: { left: "46%" as const, top: "58%" as const } },
+    { title: "Radio", line: on(1) ? "ON · P2" : "OFF · P2", color: colors.ledBlue, on: on(1), style: { right: "8%" as const, top: "16%" as const } },
+  ];
 
   return (
     <Page>
-      <View style={styles.scene}>
+      <View style={[styles.scene, narrow ? { height: 320 } : null]}>
         <LinearGradient
           colors={night ? ["#1a2744", "#24324a", "#3a4634", "#243024"] : ["#8ec8ef", "#d5eef8", "#c5e2a4", "#6f9a4e"]}
           style={StyleSheet.absoluteFill}
@@ -58,15 +70,15 @@ export function EarthPage({
         <Tree left="6%" />
         <Tree left="14%" />
         <Tree left="78%" />
-        <View style={styles.clinic}>
-          <View style={styles.roof}>
+        <View style={[styles.clinic, narrow ? { left: "50%", width: clinicW, marginLeft: -clinicW / 2 } : null]}>
+          <View style={[styles.roof, narrow ? { width: clinicW } : null]}>
             <View style={styles.panels}>
               {Array.from({ length: 8 }).map((_, i) => (
-                <View key={i} style={styles.cell} />
+                <View key={i} style={[styles.cell, { width: cell }]} />
               ))}
             </View>
           </View>
-          <View style={styles.walls}>
+          <View style={[styles.walls, narrow ? { width: clinicW * 0.9, height: 86 } : null]}>
             <View style={styles.window} />
             <View style={styles.door} />
             <View style={styles.window} />
@@ -82,20 +94,37 @@ export function EarthPage({
           label={night ? "Night · on battery" : dusk ? "Sunset · fan off" : "Daylight · solar charging the battery"}
           tone={reading.alarm ? "alert" : night || dusk ? "watch" : "ok"}
         />
-        <GlassTag title="Vaccine fridge" line={on(0) ? "ON · P1 · always" : "OFF · P1"} color={colors.green} on={on(0)} style={{ left: "30%", top: "28%" }} />
-        <GlassTag title="Fan" line={on(3) ? "ON · P4" : "OFF · P4"} color={colors.ledRed} on={on(3)} style={{ right: "24%", top: "34%" }} />
-        <GlassTag title="Battery" line={`Estimate · ${battery}%`} color={colors.gold} style={{ right: "18%", top: "52%" }} />
-        <GlassTag title="Lights" line={on(2) ? "ON · P3" : "OFF · P3"} color={colors.ledYellow} on={on(2)} style={{ left: "46%", top: "58%" }} />
-        <GlassTag title="Radio" line={on(1) ? "ON · P2" : "OFF · P2"} color={colors.ledBlue} on={on(1)} style={{ right: "8%", top: "16%" }} />
+        {narrow
+          ? null
+          : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
         <SceneTitle kicker="01 · Earth · today" title="Off-grid clinic" />
-        <KitReadout
-          live={source === "serial"}
-          dark={reading.dark}
-          hum={reading.hum}
-          temp={reading.temp}
-          note="Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm."
-        />
+        {narrow ? null : (
+          <KitReadout
+            live={source === "serial"}
+            dark={reading.dark}
+            hum={reading.hum}
+            temp={reading.temp}
+            note="Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm."
+          />
+        )}
       </View>
+      {narrow ? (
+        <>
+          <Legend>
+            {tags.map((tag) => (
+              <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
+            ))}
+          </Legend>
+          <KitReadout
+            inline
+            live={source === "serial"}
+            dark={reading.dark}
+            hum={reading.hum}
+            temp={reading.temp}
+            note="Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm."
+          />
+        </>
+      ) : null}
 
       <StatRow
         stats={[
@@ -156,7 +185,7 @@ const styles = StyleSheet.create({
   clinic: { position: "absolute", left: "28%", bottom: "16%", width: 280, alignItems: "center" },
   roof: { width: 300, height: 54, backgroundColor: "#8d9298", borderTopLeftRadius: 6, borderTopRightRadius: 6, justifyContent: "center" },
   panels: { flexDirection: "row", justifyContent: "center", gap: 4 },
-  cell: { width: 22, height: 28, backgroundColor: "#1d3d66", borderRadius: 2 },
+  cell: { height: 28, backgroundColor: "#1d3d66", borderRadius: 2 },
   walls: { width: 260, height: 110, backgroundColor: "#f3efe6", flexDirection: "row", alignItems: "flex-end", justifyContent: "space-evenly", paddingBottom: 0 },
   window: { width: 36, height: 32, backgroundColor: "#243044", marginBottom: 28 },
   door: { width: 34, height: 58, backgroundColor: "#6b4a32" },

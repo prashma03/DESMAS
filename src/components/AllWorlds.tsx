@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useScreen } from "../layout";
 import Svg, { Path } from "react-native-svg";
 import type { KitReading, KitSource } from "../kit/types";
 import { colors } from "../theme";
@@ -10,19 +11,31 @@ type Id = "earth" | "moon" | "mars";
 const ORDER: Id[] = ["earth", "moon", "mars"];
 
 function layout(hover: Id | null, width: number) {
-  const globe = Math.max(112, Math.min(230, (width - 96) / 3.8));
-  const home = {
-    earth: { left: 20, top: 48, size: globe },
-    moon: { left: 50, top: 46, size: globe * 1.08 },
-    mars: { left: 80, top: 48, size: globe },
-  };
+  const narrow = width < 640;
+  const content = Math.max(280, width - (narrow ? 28 : 48));
+  const globe = narrow
+    ? Math.max(92, Math.min(140, content * 0.32))
+    : Math.max(112, Math.min(230, (width - 96) / 3.8));
+  const focus = Math.min(narrow ? 220 : 390, Math.max(globe * 1.45, content * (narrow ? 0.58 : 0.34)));
+  const small = narrow ? Math.max(64, content * 0.18) : 120;
+  const home = narrow
+    ? {
+        earth: { left: 28, top: 30, size: globe },
+        moon: { left: 72, top: 30, size: globe },
+        mars: { left: 50, top: 68, size: globe },
+      }
+    : {
+        earth: { left: 20, top: 48, size: globe },
+        moon: { left: 50, top: 46, size: globe * 1.08 },
+        mars: { left: 80, top: 48, size: globe },
+      };
   if (!hover) return home;
   const others = ORDER.filter((id) => id !== hover);
   return {
     ...home,
-    [hover]: { left: 50, top: 42, size: 390 },
-    [others[0]]: { left: 12, top: 76, size: 120 },
-    [others[1]]: { left: 88, top: 76, size: 120 },
+    [hover]: { left: 50, top: narrow ? 32 : 42, size: focus },
+    [others[0]]: { left: narrow ? 20 : 12, top: narrow ? 80 : 76, size: small },
+    [others[1]]: { left: narrow ? 80 : 88, top: narrow ? 80 : 76, size: small },
   };
 }
 
@@ -37,7 +50,7 @@ export function AllWorlds({
   marsDelay: string;
   onOpen: (world: Id) => void;
 }) {
-  const { width } = useWindowDimensions();
+  const { width, compact, narrow } = useScreen();
   const [hover, setHover] = useState<Id | null>(null);
   const anim = useRef({
     earth: { left: new Animated.Value(22), top: new Animated.Value(46), size: new Animated.Value(200) },
@@ -60,24 +73,24 @@ export function AllWorlds({
   const live = source === "serial";
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}>
+    <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
       <View style={styles.intro}>
         <Pressable style={styles.live} onPress={() => onOpen("moon")}>
           <Text style={styles.liveMark}>LIVE</Text>
           <Text style={styles.liveTxt}>One Arduino drives all three worlds</Text>
           <Text style={styles.liveTxt}>↗</Text>
         </Pressable>
-        <Text style={styles.h1}>One system, three worlds</Text>
-        <Text style={styles.sub}>
+        <Text style={[styles.h1, narrow ? { fontSize: 30 } : compact ? { fontSize: 36 } : null]}>One system, three worlds</Text>
+        <Text style={[styles.sub, compact ? { fontSize: 15, lineHeight: 22 } : null]}>
           The same power rules and AI monitor, from an off-grid clinic to a base on the Moon to a ship orbiting Mars.
         </Text>
       </View>
 
       <View
-        style={styles.theater}
+        style={[styles.theater, { height: narrow ? 520 : 460 }]}
         {...({ onMouseLeave: () => setHover(null) } as object)}
       >
-        {hover ? null : (
+        {hover || narrow ? null : (
           <View style={styles.arcs} pointerEvents="none">
             <Svg width="100%" height="220" viewBox="0 0 1000 220">
               <Path d="M180 170 Q360 20 500 150" stroke="rgba(158,208,255,0.55)" strokeWidth="1.4" strokeDasharray="3 7" fill="none" />
@@ -94,17 +107,18 @@ export function AllWorlds({
             reading={reading}
             motion={anim[id]}
             hover={hover}
+            narrow={narrow}
             onHover={() => setHover(id)}
             onOpen={() => onOpen(id)}
           />
         ))}
       </View>
 
-      <Text style={styles.hint}>
-        {hover ? "Click to open" : "Hover a world to bring it forward · click to open"}
+      <Text style={[styles.hint, narrow ? { letterSpacing: 0.4 } : null]}>
+        {narrow ? "Tap a world to open it" : hover ? "Click to open" : "Hover a world to bring it forward · click to open"}
       </Text>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, compact ? { flexDirection: "column" } : null]}>
         <Text style={styles.footTxt}>
           <Text style={{ color: live ? colors.ok : colors.gold }}>{live ? "Live kit" : "Simulated kit"}</Text>
           {`   Light sensor ${Math.round(reading.dark)}% dark    Humidity ${Math.round(reading.hum)}%    Temp ${reading.temp.toFixed(1)} °C    Systems on ${onCount} of 4`}
@@ -120,6 +134,7 @@ function GlobeSlot({
   reading,
   motion,
   hover,
+  narrow,
   onHover,
   onOpen,
 }: {
@@ -127,6 +142,7 @@ function GlobeSlot({
   reading: KitReading;
   motion: { left: Animated.Value; top: Animated.Value; size: Animated.Value };
   hover: Id | null;
+  narrow: boolean;
   onHover: () => void;
   onOpen: () => void;
 }) {
@@ -189,7 +205,7 @@ function GlobeSlot({
       </Pressable>
       <View style={{ alignItems: "center", marginTop: 14, width: "100%", opacity: dim ? 0.85 : 1 }}>
         <Text style={styles.kicker}>{meta.kicker}</Text>
-        <Text numberOfLines={1} style={[styles.name, focused ? { fontSize: 30 } : null]}>{meta.name}</Text>
+        <Text numberOfLines={1} style={[styles.name, focused ? { fontSize: narrow ? 22 : 30 } : null]}>{meta.name}</Text>
         {dim ? null : (
           <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: meta.color }]} />
@@ -238,12 +254,16 @@ function caption(id: Id, reading: KitReading) {
 }
 
 const styles = StyleSheet.create({
-  page: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18 },
-  intro: { alignItems: "center", gap: 12 },
+  page: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18, width: "100%", maxWidth: 1240, alignSelf: "center" },
+  pageCompact: { paddingHorizontal: 14, paddingTop: 16 },
+  intro: { alignItems: "center", gap: 12, width: "100%" },
   live: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
+    maxWidth: "100%",
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -263,9 +283,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: "hidden",
   },
-  liveTxt: { color: colors.ink, fontFamily: sans, fontSize: 14 },
-  h1: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 44, letterSpacing: -1, textAlign: "center" },
-  sub: { color: colors.muted, fontFamily: sans, fontSize: 17, lineHeight: 24, textAlign: "center", maxWidth: 640 },
+  liveTxt: { color: colors.ink, fontFamily: sans, fontSize: 14, flexShrink: 1, textAlign: "center" },
+  h1: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 44, letterSpacing: -1, textAlign: "center", width: "100%" },
+  sub: { color: colors.muted, fontFamily: sans, fontSize: 17, lineHeight: 24, textAlign: "center", width: "100%", maxWidth: 640 },
   theater: { height: 430, marginTop: 4 },
   arcs: { position: "absolute", left: 0, right: 0, top: 70, height: 220 },
   arcLabel: { position: "absolute", fontFamily: mono, fontSize: 11, letterSpacing: 1 },
@@ -279,8 +299,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 8,
+    width: "100%",
   },
-  footTxt: { color: colors.dim, fontFamily: mono, fontSize: 12 },
+  footTxt: { color: colors.dim, fontFamily: mono, fontSize: 12, flexGrow: 1, flexShrink: 1, flexBasis: 240, maxWidth: "100%" },
   kicker: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase" },
   name: { color: colors.ink, fontFamily: sans, fontSize: 22, marginTop: 2 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },

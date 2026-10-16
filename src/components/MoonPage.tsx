@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
+import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { AiMonitor } from "./AIMonitor";
 import {
@@ -10,6 +11,7 @@ import {
   GlassTag,
   HumidityChart,
   KitReadout,
+  Legend,
   Lower,
   Page,
   PowerBlock,
@@ -39,15 +41,23 @@ export function MoonPage({
   events: KitEvent[];
   source: KitSource;
 }) {
+  const { narrow } = useScreen();
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("moon", reading.dark);
   const night = reading.dark >= 55;
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
+  const tags = [
+    { title: "Comms tower", line: on(1) ? "ON · link to Earth" : "OFF · link to Earth", color: colors.ledBlue, on: on(1), style: { left: "42%" as const, top: "18%" as const } },
+    { title: "Science lab", line: on(2) ? "ON" : "OFF", color: colors.ledYellow, on: on(2), style: { left: "18%" as const, top: "42%" as const } },
+    { title: "Hab A · life support", line: on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF", color: colors.green, on: on(0), style: { left: "40%" as const, top: "36%" as const } },
+    { title: "Comfort module", line: on(3) ? "ON" : "OFF", color: colors.ledRed, on: on(3), style: { right: "28%" as const, top: "48%" as const } },
+    { title: "Solar arrays", line: `Charging · ${solar}%`, color: colors.gold, on: true, style: { right: "8%" as const, top: "22%" as const } },
+  ];
 
   return (
     <Page>
-      <View style={styles.scene}>
+      <View style={[styles.scene, narrow ? { height: 320 } : null]}>
         <LinearGradient colors={["#070b16", "#121826", "#2a2e36", "#1a1c22"]} style={StyleSheet.absoluteFill} />
         <View style={styles.ground} />
         <View style={styles.crater} />
@@ -55,8 +65,8 @@ export function MoonPage({
         <View style={styles.earth}>
           <View style={styles.earthDot} />
         </View>
-        <View style={[styles.hab, { left: "22%", width: 150 }]} />
-        <View style={[styles.hab, { left: "38%", width: 120, bottom: "38%" }]} />
+        <View style={[styles.hab, narrow ? { left: "18%", width: "34%" } : { left: "22%", width: 150 }]} />
+        <View style={[styles.hab, narrow ? { left: "40%", width: "28%", bottom: "38%" } : { left: "38%", width: 120, bottom: "38%" }]} />
         <View style={styles.dome} />
         <View style={styles.dish} />
         <View style={styles.array} />
@@ -65,24 +75,42 @@ export function MoonPage({
           label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${onCount} of 4 on` : "Lunar day · all systems on"}
           tone={reading.alarm ? "alert" : night ? "watch" : "ok"}
         />
-        <View style={styles.linkPill}>
-          <View style={styles.earthDotSm} />
-          <Text style={styles.linkTxt}>Earth · 1.3 s away by radio</Text>
-        </View>
-        <GlassTag title="Comms tower" line={on(1) ? "ON · link to Earth" : "OFF · link to Earth"} color={colors.ledBlue} on={on(1)} style={{ left: "42%", top: "18%" }} />
-        <GlassTag title="Science lab" line={on(2) ? "ON" : "OFF"} color={colors.ledYellow} on={on(2)} style={{ left: "18%", top: "42%" }} />
-        <GlassTag title="Hab A · life support" line={on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF"} color={colors.green} on={on(0)} style={{ left: "40%", top: "36%" }} />
-        <GlassTag title="Comfort module" line={on(3) ? "ON" : "OFF"} color={colors.ledRed} on={on(3)} style={{ right: "28%", top: "48%" }} />
-        <GlassTag title="Solar arrays" line={`Charging · ${solar}%`} color={colors.gold} style={{ right: "8%", top: "22%" }} />
+        {narrow ? null : (
+          <View style={styles.linkPill}>
+            <View style={styles.earthDotSm} />
+            <Text style={styles.linkTxt}>Earth · 1.3 s away by radio</Text>
+          </View>
+        )}
+        {narrow ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
         <SceneTitle kicker="02 · Moon · lunar south pole" title="Artemis base" />
-        <KitReadout
-          live={source === "serial"}
-          dark={reading.dark}
-          hum={reading.hum}
-          temp={reading.temp}
-          note="Cover the light sensor for lunar night. Breathe on the DHT11 to set off the humidity alarm."
-        />
+        {narrow ? null : (
+          <KitReadout
+            live={source === "serial"}
+            dark={reading.dark}
+            hum={reading.hum}
+            temp={reading.temp}
+            note="Cover the light sensor for lunar night. Breathe on the DHT11 to set off the humidity alarm."
+          />
+        )}
       </View>
+      {narrow ? (
+        <>
+          <Legend>
+            <GlassTag inline title="Earth link" line="1.3 s by radio" color={colors.blue} />
+            {tags.map((tag) => (
+              <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
+            ))}
+          </Legend>
+          <KitReadout
+            inline
+            live={source === "serial"}
+            dark={reading.dark}
+            hum={reading.hum}
+            temp={reading.temp}
+            note="Cover the light sensor for lunar night. Breathe on the DHT11 to set off the humidity alarm."
+          />
+        </>
+      ) : null}
 
       <StatRow
         stats={[

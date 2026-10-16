@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, View } from "react-native";
 import { AllWorlds } from "./src/components/AllWorlds";
 import { WorldView } from "./src/components/WorldView";
 import type { WorldId } from "./src/kit/types";
@@ -8,6 +8,7 @@ import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
+import { useScreen } from "./src/layout";
 const NAV: { id: WorldId; label: string }[] = [
   { id: "all", label: "All worlds" },
   { id: "earth", label: "Earth" },
@@ -24,9 +25,11 @@ const STARS = Array.from({ length: 48 }, (_, i) => ({
 
 export default function App() {
   const kit = useKit();
+  const { compact, narrow } = useScreen();
   const [world, setWorld] = useState<WorldId>("all");
   const [marsDelay, setMarsDelay] = useState("3 to 22 min");
   const live = kit.source === "serial";
+  const androidTop = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) : 0;
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
@@ -52,7 +55,7 @@ export default function App() {
   }, []);
 
   return (
-    <View style={shell.root}>
+    <SafeAreaView style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}>
       <StatusBar style="light" />
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         {STARS.map((star, i) => (
@@ -71,39 +74,61 @@ export default function App() {
           />
         ))}
       </View>
-      <View style={styles.topbar}>
-        <View style={styles.brandWrap}>
-          <View style={styles.mark}>
-            <View style={styles.markDot} />
+      <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
+        <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
+          <View style={styles.brand}>
+            <View style={styles.mark}>
+              <View style={styles.markDot} />
+            </View>
+            <Text style={styles.brandTxt}>DESMAS</Text>
           </View>
-          <Text style={styles.brand}>DESMAS</Text>
+          {compact ? (
+            <View style={[styles.sim, live ? styles.simLive : null, styles.simCompact]}>
+              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
+              <Text numberOfLines={1} style={styles.simTxt}>{live ? "Arduino live" : narrow ? "Simulated" : "Simulated kit"}</Text>
+            </View>
+          ) : null}
         </View>
-        <View style={styles.nav}>
+        <View style={[styles.nav, compact ? styles.navCompact : null]}>
           {NAV.map((item) => {
             const on = world === item.id;
+            const label = narrow && item.id === "all" ? "All" : item.label;
             return (
-              <Pressable key={item.id} style={[styles.navBtn, on ? styles.navOn : null]} onPressIn={() => setWorld(item.id)}>
-                <Text style={[styles.navTxt, on ? styles.navTxtOn : null]}>{item.label}</Text>
+              <Pressable key={item.id} style={[styles.navBtn, compact ? styles.navBtnCompact : null, on ? styles.navOn : null]} onPressIn={() => setWorld(item.id)}>
+                <Text numberOfLines={1} style={[styles.navTxt, compact ? styles.navTxtCompact : null, on ? styles.navTxtOn : null]}>{label}</Text>
               </Pressable>
             );
           })}
         </View>
-        <View style={styles.tools}>
-          <View style={[styles.sim, live ? styles.simLive : null]}>
-            <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
-            <Text style={styles.simTxt}>{live ? "Arduino live" : "Simulated kit"}</Text>
-          </View>
-          {live ? null : (
+        {compact ? (
+          live ? null : (
             <Pressable
-              style={styles.connect}
+              style={[styles.connect, styles.connectCompact]}
               onPress={() =>
                 Alert.alert("Connect Arduino", "Open this page in Chrome or Edge, plug in the board, and connect when serial is enabled. The simulated kit is running now.")
               }
             >
               <Text style={styles.connectTxt}>Connect Arduino</Text>
             </Pressable>
-          )}
-        </View>
+          )
+        ) : (
+          <View style={styles.tools}>
+            <View style={[styles.sim, live ? styles.simLive : null]}>
+              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
+              <Text style={styles.simTxt}>{live ? "Arduino live" : "Simulated kit"}</Text>
+            </View>
+            {live ? null : (
+              <Pressable
+                style={styles.connect}
+                onPress={() =>
+                  Alert.alert("Connect Arduino", "Open this page in Chrome or Edge, plug in the board, and connect when serial is enabled. The simulated kit is running now.")
+                }
+              >
+                <Text style={styles.connectTxt}>Connect Arduino</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
       </View>
       <View style={shell.stage}>
         {world === "all" ? (
@@ -119,7 +144,7 @@ export default function App() {
           />
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -132,25 +157,32 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 22,
     paddingVertical: 14,
-    flexWrap: "wrap",
   },
-  brandWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minWidth: 140 },
+  topbarCompact: { flexDirection: "column", alignItems: "stretch", paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
+  brandWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0 },
+  brandCompact: { flex: 0, width: "100%", justifyContent: "space-between" },
+  brand: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
   mark: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.4, borderColor: colors.gold, alignItems: "center", justifyContent: "center" },
   markDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.gold },
-  brand: { color: colors.ink, fontFamily: sans, fontWeight: "600", letterSpacing: 2.4, fontSize: 14 },
+  brandTxt: { color: colors.ink, fontFamily: sans, fontWeight: "600", letterSpacing: 2.4, fontSize: 14 },
   nav: {
     flexDirection: "row",
+    flexShrink: 1,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.line,
     padding: 4,
   },
-  navBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  navCompact: { alignSelf: "stretch", flexShrink: 0 },
+  navBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, alignItems: "center" },
+  navBtnCompact: { flex: 1, paddingHorizontal: 4, minWidth: 0 },
   navOn: { backgroundColor: colors.ink },
   navTxt: { color: colors.muted, fontFamily: sans, fontSize: 14, userSelect: "none" },
+  navTxtCompact: { fontSize: 13, textAlign: "center" },
   navTxtOn: { color: "#111", fontWeight: "600" },
-  tools: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minWidth: 140, justifyContent: "flex-end" },
+  tools: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0, justifyContent: "flex-end" },
+  simCompact: { flexShrink: 1, minWidth: 0 },
   sim: {
     flexDirection: "row",
     alignItems: "center",
@@ -163,7 +195,8 @@ const styles = StyleSheet.create({
   },
   simLive: { borderColor: "rgba(134,239,172,0.45)" },
   simDot: { width: 7, height: 7, borderRadius: 4 },
-  simTxt: { color: colors.muted, fontFamily: mono, fontSize: 11, letterSpacing: 0.8 },
+  simTxt: { color: colors.muted, fontFamily: mono, fontSize: 11, letterSpacing: 0.8, flexShrink: 1 },
   connect: { backgroundColor: colors.ink, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  connectCompact: { alignItems: "center" },
   connectTxt: { color: "#111", fontFamily: sans, fontWeight: "600", fontSize: 14 },
 });

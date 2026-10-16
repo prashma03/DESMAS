@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Image, Platform, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 import Svg, { Line, Polyline } from "react-native-svg";
 import type { KitEvent, KitReading } from "../kit/types";
+import { useScreen } from "../layout";
 import { colors } from "../theme";
 
 export const mono = Platform.OS === "web" ? "Geist Mono, ui-monospace, monospace" : undefined;
@@ -67,8 +68,9 @@ const KIND_COLOR: Record<KitEvent["kind"], string> = {
 };
 
 export function Page({ children }: { children: ReactNode }) {
+  const { compact } = useScreen();
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
       {children}
     </ScrollView>
   );
@@ -94,15 +96,17 @@ export function GlassTag({
   color = colors.ok,
   on = true,
   style,
+  inline,
 }: {
   title: string;
   line: string;
   color?: string;
   on?: boolean;
   style?: ViewStyle;
+  inline?: boolean;
 }) {
   return (
-    <View style={[styles.tag, style]}>
+    <View style={[inline ? styles.tagInline : styles.tag, style]}>
       <Text style={styles.tagTitle}>{title}</Text>
       <View style={styles.tagRow}>
         <View style={[styles.dot, { backgroundColor: on ? color : "#555" }]} />
@@ -117,16 +121,17 @@ export function DayBadge({ label, tone = "ok" }: { label: string; tone?: "ok" | 
   return (
     <View style={styles.badge}>
       <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text style={[styles.badgeTxt, { color }]}>{label}</Text>
+      <Text style={[styles.badgeTxt, { color, flexShrink: 1 }]}>{label}</Text>
     </View>
   );
 }
 
 export function SceneTitle({ kicker, title, style }: { kicker: string; title: string; style?: ViewStyle }) {
+  const { narrow } = useScreen();
   return (
-    <View style={[styles.titleBlock, style]}>
+    <View style={[styles.titleBlock, narrow ? styles.titleBlockNarrow : null, style]}>
       <Text style={styles.kicker}>{kicker}</Text>
-      <Text style={styles.sceneTitle}>{title}</Text>
+      <Text style={[styles.sceneTitle, narrow ? { fontSize: 26 } : null]}>{title}</Text>
     </View>
   );
 }
@@ -137,15 +142,17 @@ export function KitReadout({
   hum,
   temp,
   note,
+  inline,
 }: {
   live: boolean;
   dark: number;
   hum: number;
   temp: number;
   note: string;
+  inline?: boolean;
 }) {
   return (
-    <View style={styles.kitCard}>
+    <View style={inline ? styles.kitInline : styles.kitCard}>
       <View style={styles.kitHead}>
         <Text style={styles.kicker}>From the kit</Text>
         <Text style={[styles.kicker, { color: live ? colors.ok : colors.gold }]}>{live ? "Live" : "Simulated"}</Text>
@@ -190,13 +197,14 @@ export type Stat = {
 };
 
 function StatCard({ stat }: { stat: Stat }) {
+  const { narrow } = useScreen();
   return (
-    <View style={styles.stat}>
+    <View style={[styles.stat, narrow ? { flexBasis: "47%" } : null]}>
       <View style={styles.statHead}>
-        <Text style={styles.kicker}>{stat.label}</Text>
+        <Text style={[styles.kicker, { flexShrink: 1 }]}>{stat.label}</Text>
         {stat.badge ? <Text style={styles.badgeMini}>{stat.badge}</Text> : null}
       </View>
-      <Text style={[styles.statVal, stat.valueColor ? { color: stat.valueColor } : null]}>{stat.value}</Text>
+      <Text style={[styles.statVal, narrow ? { fontSize: 22 } : null, stat.valueColor ? { color: stat.valueColor } : null]}>{stat.value}</Text>
       <Sparkline values={stat.series ?? []} color={stat.color ?? colors.gold} />
       <Text style={styles.note}>{stat.note}</Text>
     </View>
@@ -232,14 +240,17 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
 }
 
 export function SideNav({ label, items }: { label: string; items: string[] }) {
+  const { narrow } = useScreen();
   return (
-    <View style={styles.nav}>
+    <View style={[styles.nav, narrow ? styles.navNarrow : null]}>
       <Text style={styles.kicker}>{label}</Text>
-      {items.map((item, i) => (
-        <View key={item} style={[styles.navItem, i === 0 ? styles.navOn : null]}>
-          <Text style={[styles.navTxt, i === 0 ? styles.navTxtOn : null]}>{item}</Text>
-        </View>
-      ))}
+      <View style={narrow ? styles.navChips : styles.navList}>
+        {items.map((item, i) => (
+          <View key={item} style={[styles.navItem, i === 0 ? styles.navOn : null]}>
+            <Text style={[styles.navTxt, i === 0 ? styles.navTxtOn : null]}>{item}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -262,12 +273,13 @@ export function PowerBlock({
   battery: number;
 }) {
   const on = leds.filter((v) => v > 0).length;
+  const { narrow } = useScreen();
   return (
     <View style={{ gap: 12 }}>
       <View style={styles.powerHead}>
-        <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
           <Text style={[styles.kicker, { color: colors.gold }]}>{eyebrow}</Text>
-          <Text style={styles.powerTitle}>{title}</Text>
+          <Text style={[styles.powerTitle, narrow ? { fontSize: 22 } : null]}>{title}</Text>
         </View>
         <Text style={styles.kicker}>{on === 4 ? "All four on" : `${on} of 4 on`}</Text>
       </View>
@@ -292,7 +304,7 @@ export function PowerBlock({
         {systems.map((sys, i) => {
           const onLed = leds[i] > 0;
           return (
-            <View key={sys.name} style={[styles.sys, onLed ? null : { opacity: 0.55 }]}>
+            <View key={sys.name} style={[styles.sys, narrow ? { flexBasis: "47%" } : null, onLed ? null : { opacity: 0.55 }]}>
               <View style={styles.sysTop}>
                 <Text style={[styles.kicker, { color: LEDS[i] }]}>{`P${i + 1}`}</Text>
                 <View style={[styles.toggle, { backgroundColor: onLed ? colors.green : "#2a2d33" }]}>
@@ -318,7 +330,7 @@ function curve(on: boolean, dip: number) {
 export function AlertFeed({ world, events }: { world: WorldKey; events: KitEvent[] }) {
   const rows = events.slice(0, 6);
   return (
-    <View style={[styles.panel, { flex: 1, minWidth: 260 }]}>
+    <View style={[styles.panel, styles.panelFlex]}>
       <Text style={styles.kicker}>Alert feed · from sensor events</Text>
       <Text style={styles.panelTitle}>What just happened</Text>
       <View style={{ gap: 12, marginTop: 8 }}>
@@ -326,7 +338,7 @@ export function AlertFeed({ world, events }: { world: WorldKey; events: KitEvent
         {rows.map((event) => (
           <View key={event.id} style={styles.feedRow}>
             <Text style={styles.time}>{clock(event.at)}</Text>
-            <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
               <Text style={[styles.kind, { color: KIND_COLOR[event.kind] }]}>{event.kind}</Text>
               <Text style={styles.feedTxt}>{feedMessage(world, event.message)}</Text>
             </View>
@@ -351,9 +363,9 @@ export function HumidityChart({ history, reading }: { history: KitReading[]; rea
           .join(" ")
       : `0,${h} ${w},${h}`;
   return (
-    <View style={[styles.panel, { flex: 1.2, minWidth: 280 }]}>
+    <View style={[styles.panel, styles.panelFlex, { flexGrow: 1.2 }]}>
       <View style={styles.powerHead}>
-        <View>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.kicker}>Hab A · DHT11 on pin 2</Text>
           <Text style={styles.panelTitle}>Humidity, last 30 seconds</Text>
         </View>
@@ -378,11 +390,11 @@ export function SerialLog({ history }: { history: KitReading[] }) {
   return (
     <View style={styles.panel}>
       <View style={styles.powerHead}>
-        <View>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.kicker}>Raw serial · USB · 9600 baud</Text>
           <Text style={styles.panelTitle}>What the Arduino sends</Text>
         </View>
-        <Text style={styles.kicker}>2 lines a second · simulated</Text>
+        <Text style={[styles.kicker, { flexShrink: 1 }]}>2 lines a second · simulated</Text>
       </View>
       <Text style={styles.serial}>{lines.join("\n\n") || "Waiting for lines…"}</Text>
     </View>
@@ -390,14 +402,33 @@ export function SerialLog({ history }: { history: KitReading[] }) {
 }
 
 export function LedMap({ leds }: { leds: number[] }) {
+  const { narrow } = useScreen();
   const rows = [
     ["P1 · Green", "Life support", "Vaccine fridge"],
     ["P2 · Blue", "Comms", "Radio"],
     ["P3 · Yellow", "Science", "Lights"],
     ["P4 · Red", "Comfort", "Fan"],
   ];
+  if (narrow) {
+    return (
+      <View style={[styles.panel, styles.panelFlex]}>
+        <Text style={styles.kicker}>Same hardware, same code</Text>
+        <Text style={styles.panelTitle}>Same four LEDs, two places</Text>
+        {rows.map((row, i) => (
+          <View key={row[0]} style={styles.ledCard}>
+            <View style={styles.ledCardHead}>
+              <Text style={[styles.mapCell, { color: LEDS[i], flex: 1 }]}>{row[0]}</Text>
+              <Text style={[styles.mapCell, { color: leds[i] > 0 ? colors.ok : colors.dim, flex: 0 }]}>{leds[i] > 0 ? "ON" : "OFF"}</Text>
+            </View>
+            <Text style={styles.note}>{`Moon base · ${row[1]}`}</Text>
+            <Text style={styles.note}>{`Clinic · ${row[2]}`}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
-    <View style={[styles.panel, { flex: 1.1, minWidth: 280 }]}>
+    <View style={[styles.panel, styles.panelFlex, { flexGrow: 1.1 }]}>
       <Text style={styles.kicker}>Same hardware, same code</Text>
       <Text style={styles.panelTitle}>Same four LEDs, two places</Text>
       <View style={[styles.mapRow, { marginTop: 12 }]}>
@@ -420,7 +451,7 @@ export function LedMap({ leds }: { leds: number[] }) {
 
 export function DelayCard({ delay }: { delay: string }) {
   return (
-    <View style={[styles.panel, { flex: 1, minWidth: 260 }]}>
+    <View style={[styles.panel, styles.panelFlex]}>
       <Text style={styles.kicker}>Why it runs onboard</Text>
       <View style={styles.powerHead}>
         <Text style={styles.panelTitle}>Wait for Earth, or decide here?</Text>
@@ -446,14 +477,14 @@ export function FaultLog({ events }: { events: KitEvent[] }) {
     { time: "13:48", text: "Relay ship: camera heater fault. Turned the camera off to save power." },
   ];
   return (
-    <View style={[styles.panel, { flex: 1, minWidth: 260 }]}>
+    <View style={[styles.panel, styles.panelFlex]}>
       <Text style={styles.kicker}>Fault log</Text>
       <Text style={styles.panelTitle}>Handled without Earth</Text>
       <View style={{ gap: 12, marginTop: 8 }}>
         {events.slice(0, 4).map((event) => (
           <View key={event.id} style={styles.feedRow}>
             <Text style={styles.time}>{clock(event.at)}</Text>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.kind, { color: KIND_COLOR[event.kind] }]}>{event.kind}</Text>
               <Text style={styles.feedTxt}>{feedMessage("mars", event.message)}</Text>
             </View>
@@ -462,7 +493,7 @@ export function FaultLog({ events }: { events: KitEvent[] }) {
         {handled.map((row) => (
           <View key={row.time} style={styles.feedRow}>
             <Text style={styles.time}>{row.time}</Text>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.kind, { color: colors.ok }]}>HANDLED</Text>
               <Text style={styles.feedTxt}>{row.text}</Text>
             </View>
@@ -477,39 +508,59 @@ export function Split({ children }: { children: ReactNode }) {
   return <View style={styles.split}>{children}</View>;
 }
 
+export function Legend({ children }: { children: ReactNode }) {
+  return <View style={styles.legend}>{children}</View>;
+}
+
 export function Lower({ nav, children }: { nav: ReactNode; children: ReactNode }) {
+  const { narrow } = useScreen();
   return (
-    <View style={styles.lower}>
+    <View style={[styles.lower, narrow ? styles.lowerNarrow : null]}>
       {nav}
-      <View style={{ flex: 1, minWidth: 280, gap: 14 }}>{children}</View>
+      <View style={[styles.lowerMain, narrow ? styles.lowerMainNarrow : null]}>{children}</View>
     </View>
   );
 }
 
+const cardShell = {
+  borderRadius: 16,
+  padding: 12,
+  gap: 8,
+  backgroundColor: "rgba(8,10,14,0.82)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.1)",
+} as const;
+
+const tagShell = {
+  backgroundColor: "rgba(8,10,14,0.78)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.12)",
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  gap: 3,
+  maxWidth: "100%" as const,
+};
+
 const styles = StyleSheet.create({
+  scroll: { flex: 1, minHeight: 0 },
   page: { padding: 18, paddingBottom: 48, gap: 14, width: "100%", maxWidth: 1240, alignSelf: "center" },
+  pageCompact: { paddingHorizontal: 12, paddingTop: 12, gap: 12 },
   planetPhoto: { width: "100%", height: "100%" },
   clouds: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.35 },
   shade: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.85 },
-  tag: {
-    position: "absolute",
-    backgroundColor: "rgba(8,10,14,0.78)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 3,
-  },
+  tag: { position: "absolute", ...tagShell },
+  tagInline: { alignSelf: "flex-start", flexShrink: 1, ...tagShell },
   tagTitle: { color: colors.ink, fontSize: 13, fontFamily: sans },
   tagRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  tagLine: { fontSize: 11, fontFamily: mono, letterSpacing: 0.4 },
+  tagLine: { fontSize: 11, fontFamily: mono, letterSpacing: 0.4, flexShrink: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   badge: {
     position: "absolute",
-    top: 14,
-    left: 14,
+    top: 12,
+    left: 12,
     zIndex: 3,
+    maxWidth: "92%",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -532,6 +583,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "rgba(6,8,12,0.55)",
   },
+  titleBlockNarrow: { left: 12, right: 12, bottom: 12, maxWidth: undefined },
   kicker: {
     color: colors.dim,
     fontFamily: mono,
@@ -540,19 +592,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   sceneTitle: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 34, letterSpacing: -0.6, marginTop: 2 },
-  kitCard: {
-    position: "absolute",
-    right: 14,
-    bottom: 14,
-    zIndex: 3,
-    width: 280,
-    borderRadius: 16,
-    padding: 12,
-    gap: 8,
-    backgroundColor: "rgba(8,10,14,0.82)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
+  kitCard: { ...cardShell, position: "absolute", right: 14, bottom: 14, zIndex: 3, width: 280, maxWidth: "46%" },
+  kitInline: { ...cardShell, width: "100%" },
   kitHead: { flexDirection: "row", justifyContent: "space-between" },
   kitNums: { flexDirection: "row", gap: 8 },
   kitVal: { color: colors.ink, fontFamily: mono, fontSize: 16, marginTop: 2 },
@@ -560,14 +601,16 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   stat: {
     flexGrow: 1,
+    flexShrink: 1,
     flexBasis: 150,
+    maxWidth: "100%",
+    minWidth: 0,
     backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.line,
     padding: 12,
     gap: 4,
-    minWidth: 140,
   },
   statHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
   badgeMini: {
@@ -582,18 +625,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   statVal: { color: colors.ink, fontFamily: sans, fontWeight: "400", fontSize: 26, letterSpacing: -0.4 },
-  nav: { width: 176, gap: 6, paddingTop: 8 },
+  nav: { width: 176, gap: 8, paddingTop: 8 },
+  navNarrow: { width: "100%", paddingTop: 0 },
+  navList: { gap: 6 },
+  navChips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   navItem: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   navOn: { backgroundColor: "#3a2a16" },
   navTxt: { color: colors.muted, fontFamily: sans, fontSize: 14 },
   navTxtOn: { color: colors.ink },
-  powerHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12 },
+  powerHead: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 12 },
   powerTitle: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 28, letterSpacing: -0.4 },
   curveWrap: { height: 86, justifyContent: "center" },
   curvePill: {
     position: "absolute",
     alignSelf: "center",
     top: 4,
+    maxWidth: "92%",
     backgroundColor: "rgba(12,14,18,0.9)",
     borderRadius: 999,
     borderWidth: 1,
@@ -604,8 +651,10 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sys: {
     flexGrow: 1,
+    flexShrink: 1,
     flexBasis: 160,
-    minWidth: 150,
+    minWidth: 0,
+    maxWidth: "100%",
     backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
@@ -625,21 +674,36 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     padding: 16,
     gap: 6,
+    maxWidth: "100%",
   },
+  panelFlex: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
   panelTitle: { color: colors.ink, fontFamily: sans, fontWeight: "400", fontSize: 22, letterSpacing: -0.3 },
   feedRow: { flexDirection: "row", gap: 10 },
   time: { color: colors.dim, fontFamily: mono, fontSize: 11, width: 62 },
   kind: { fontFamily: mono, fontSize: 11, letterSpacing: 0.8 },
-  feedTxt: { color: colors.muted, fontSize: 14, lineHeight: 18, fontFamily: sans },
+  feedTxt: { color: colors.muted, fontSize: 14, lineHeight: 18, fontFamily: sans, flexShrink: 1 },
   big: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 36 },
   chartFoot: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
-  serial: { color: "#b7e3c8", fontFamily: mono, fontSize: 12, lineHeight: 18, marginTop: 8 },
+  serial: {
+    color: "#b7e3c8",
+    fontFamily: mono,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+    ...(Platform.OS === "web" ? ({ wordBreak: "break-word" } as object) : null),
+  },
   mapRow: { flexDirection: "row", gap: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.line },
-  mapCell: { flex: 1, color: colors.ink, fontSize: 13, fontFamily: sans },
+  mapCell: { flex: 1, minWidth: 0, color: colors.ink, fontSize: 13, fontFamily: sans },
+  ledCard: { gap: 2, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.line },
+  ledCardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   body: { color: colors.ink, fontSize: 15, fontFamily: sans },
   doneRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
   track: { height: 6, borderRadius: 99, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },
   trackFill: { width: "100%", height: "100%", backgroundColor: "#FFB07A" },
   split: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%" },
   lower: { flexDirection: "row", flexWrap: "wrap", gap: 16, alignItems: "flex-start" },
+  lowerNarrow: { flexDirection: "column" },
+  lowerMain: { flex: 1, minWidth: 0, gap: 14, maxWidth: "100%" },
+  lowerMainNarrow: { width: "100%", flexBasis: "auto" },
 });

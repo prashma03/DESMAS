@@ -19,6 +19,6 @@ export const colors = {
 };
 
 export const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  stage: { flex: 1 },
+  root: { flex: 1, minHeight: 0, backgroundColor: colors.bg, overflow: "hidden" },
+  stage: { flex: 1, minHeight: 0 },
 });

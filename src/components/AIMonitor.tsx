@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { KitReading, KitSource, WorldId } from "../kit/types";
 import { API } from "../api";
+import { useScreen } from "../layout";
 import { colors } from "../theme";
+import { speakAlert, stopVoice, voiceSupported } from "../voice";
 import { mono, sans, solarOf } from "./dashboard";
 
 const QUESTIONS: Record<Exclude<WorldId, "all">, string[]> = {
@@ -135,6 +137,30 @@ export function AiMonitor({
     return [{ q, a: cannedAnswer(world, q, reading) }];
   });
   const finished = info.steps.filter((_, i) => done[i]).length;
+  const canSpeak = voiceSupported();
+  const [voice, setVoice] = useState(() =>
+    canSpeak
+      ? { text: "Ready. Speak Alert reads the current finding out loud.", error: false }
+      : { text: "Speech synthesis is not available in this browser.", error: true },
+  );
+  const spokenAlarm = useRef(false);
+  const line = `${info.title}. ${info.body}`;
+  const lineRef = useRef(line);
+  lineRef.current = line;
+  const speak = () => speakAlert(line, setVoice);
+  const stop = () => {
+    stopVoice();
+    setVoice({ text: "Voice stopped.", error: false });
+  };
+
+  useEffect(() => {
+    if (reading.alarm && !spokenAlarm.current) {
+      spokenAlarm.current = true;
+      speakAlert(lineRef.current, setVoice);
+    }
+    if (!reading.alarm) spokenAlarm.current = false;
+  }, [reading.alarm, world]);
+
   const ask = async (q: string) => {
     const text = q.trim();
     if (!text || pending) return;
@@ -178,6 +204,7 @@ export function AiMonitor({
       setPending(false);
     }
   };
+  const { narrow } = useScreen();
   const tone = level === "ALERT" ? colors.alert : level === "WATCH" ? colors.watch : colors.ok;
   const rate =
     world === "earth"
@@ -199,9 +226,28 @@ export function AiMonitor({
       </View>
       <View style={styles.titleRow}>
         <Text style={[styles.level, { color: tone, borderColor: tone }]}>{level}</Text>
-        <Text style={styles.title}>{info.title}</Text>
+        <Text style={[styles.title, narrow ? { fontSize: 20 } : null]}>{info.title}</Text>
       </View>
       <Text style={styles.body}>{info.body}</Text>
+      <View style={styles.voice}>
+        <View style={styles.voiceBtns}>
+          <Pressable
+            style={[styles.speakBtn, !canSpeak ? styles.voiceOff : null]}
+            disabled={!canSpeak}
+            onPress={speak}
+          >
+            <Text style={styles.speakTxt}>Speak Alert</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.stopBtn, !canSpeak ? styles.voiceOff : null]}
+            disabled={!canSpeak}
+            onPress={stop}
+          >
+            <Text style={styles.stopTxt}>Stop Voice</Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.voiceStatus, voice.error ? styles.voiceErr : null]}>{voice.text}</Text>
+      </View>
       <View style={styles.chips}>
         <Text style={styles.kicker}>Based on</Text>
         <Chip text={`Humidity ${Math.round(reading.hum)}%`} color={reading.alarm ? colors.alert : colors.ledBlue} />
@@ -287,6 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0c0e12",
     padding: 16,
     gap: 12,
+    maxWidth: "100%",
   },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" },
   headLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -304,21 +351,30 @@ const styles = StyleSheet.create({
   rate: { color: colors.blue, fontFamily: mono, fontSize: 11, letterSpacing: 0.4 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   level: { fontFamily: mono, fontSize: 11, letterSpacing: 0.8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, overflow: "hidden" },
-  title: { color: colors.ink, fontFamily: sans, fontWeight: "400", fontSize: 26, letterSpacing: -0.4, flexShrink: 1 },
+  title: { color: colors.ink, fontFamily: sans, fontWeight: "400", fontSize: 26, letterSpacing: -0.4, flexGrow: 1, flexShrink: 1, flexBasis: 180, minWidth: 0 },
   body: { color: colors.muted, fontSize: 15, lineHeight: 22, fontFamily: sans },
+  voice: { gap: 8 },
+  voiceBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  speakBtn: { backgroundColor: colors.blue, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  speakTxt: { color: "#061018", fontFamily: sans, fontWeight: "600", fontSize: 14 },
+  stopBtn: { backgroundColor: "#31445f", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  stopTxt: { color: "#d7e4f5", fontFamily: sans, fontWeight: "600", fontSize: 14 },
+  voiceOff: { opacity: 0.55 },
+  voiceStatus: { color: colors.muted, fontFamily: sans, fontSize: 13 },
+  voiceErr: { color: colors.alert },
   chips: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   kicker: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 8, paddingVertical: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   chipTxt: { color: colors.ink, fontSize: 12, fontFamily: sans },
-  columns: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  box: { flexGrow: 1, flexBasis: 280, borderRadius: 16, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 10, backgroundColor: "rgba(255,255,255,0.02)" },
+  columns: { flexDirection: "row", flexWrap: "wrap", gap: 12, width: "100%" },
+  box: { flexGrow: 1, flexShrink: 1, flexBasis: 280, minWidth: 0, maxWidth: "100%", borderRadius: 16, borderWidth: 1, borderColor: colors.line, padding: 12, gap: 10, backgroundColor: "rgba(255,255,255,0.02)" },
   step: { flexDirection: "row", gap: 10, alignItems: "flex-start", paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.line },
   check: { width: 16, height: 16, borderRadius: 4, borderWidth: 1, borderColor: colors.dim, marginTop: 2 },
   checkOn: { backgroundColor: colors.green, borderColor: colors.green },
   stepTxt: { color: colors.ink, flex: 1, fontSize: 14, lineHeight: 20, fontFamily: sans },
   muted: { color: colors.dim, fontSize: 13, lineHeight: 18, fontFamily: sans },
-  part: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "rgba(134,239,172,0.35)", backgroundColor: "rgba(134,239,172,0.08)", borderRadius: 12, padding: 10 },
+  part: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "rgba(134,239,172,0.35)", backgroundColor: "rgba(134,239,172,0.08)", borderRadius: 12, padding: 10 },
   stock: { color: colors.ok, fontFamily: mono, fontSize: 11, letterSpacing: 0.6 },
   partName: { color: colors.ink, flex: 1, fontFamily: sans },
   crew: { alignSelf: "flex-end", maxWidth: "90%", backgroundColor: "#2a2e36", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
@@ -328,8 +384,8 @@ const styles = StyleSheet.create({
   suggest: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   suggestBtn: { borderRadius: 999, borderWidth: 1, borderColor: "rgba(90,168,255,0.45)", paddingHorizontal: 10, paddingVertical: 6 },
   suggestTxt: { color: colors.blue, fontSize: 13, fontFamily: sans },
-  askRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: colors.line, borderRadius: 999, paddingLeft: 14, paddingRight: 4, paddingVertical: 4 },
-  input: { flex: 1, color: colors.ink, fontFamily: sans, fontSize: 14, paddingVertical: Platform.OS === "web" ? 8 : 4 },
+  askRow: { flexDirection: "row", alignItems: "center", gap: 8, width: "100%", borderWidth: 1, borderColor: colors.line, borderRadius: 999, paddingLeft: 14, paddingRight: 4, paddingVertical: 4 },
+  input: { flex: 1, minWidth: 0, color: colors.ink, fontFamily: sans, fontSize: 14, paddingVertical: Platform.OS === "web" ? 8 : 4 },
   send: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
   sendTxt: { color: "#111", fontSize: 16, fontWeight: "700" },
 });
