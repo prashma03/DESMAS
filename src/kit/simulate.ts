@@ -1,73 +1,129 @@
-import type { Reading } from "./types";
-import { LOOP_MS } from "./types";
+import type { KitEvent, KitReading, LedState } from "./types";
 
-function clamp(n: number, a: number, b: number) {
-  return Math.max(a, Math.min(b, n));
-}
+const LBASE = 230;
+const HBASE = 52;
+const CUT = 62;
+const LOOP_MS = 44_000;
+
+type Keyframe = { t: number; dark: number; hum: number; temp: number };
+
+const KEYFRAMES: Keyframe[] = [
+  { t: 0, dark: 3, hum: 53.0, temp: 27.4 },
+  { t: 6_000, dark: 8, hum: 53.1, temp: 27.4 },
+  { t: 10_000, dark: 32, hum: 53.2, temp: 27.4 },
+  { t: 12_000, dark: 49, hum: 53.3, temp: 27.4 },
+  { t: 14_000, dark: 58, hum: 53.4, temp: 27.4 },
+  { t: 18_000, dark: 62, hum: 58.0, temp: 27.5 },
+  { t: 22_000, dark: 64, hum: 64.0, temp: 27.6 },
+  { t: 26_000, dark: 60, hum: 81.0, temp: 27.9 },
+  { t: 32_000, dark: 40, hum: 61.0, temp: 27.6 },
+  { t: 36_000, dark: 20, hum: 53.0, temp: 27.4 },
+  { t: 40_000, dark: 4, hum: 53.0, temp: 27.4 },
+  { t: LOOP_MS, dark: 3, hum: 53.0, temp: 27.4 },
+];
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-function ease(t: number) {
-  return t * t * (3 - 2 * t);
+function at(loopMs: number): { dark: number; hum: number; temp: number } {
+  const t = loopMs % LOOP_MS;
+  let i = 0;
+  while (i < KEYFRAMES.length - 1 && KEYFRAMES[i + 1].t < t) i += 1;
+  const a = KEYFRAMES[i];
+  const b = KEYFRAMES[i + 1];
+  const u = (t - a.t) / Math.max(1, b.t - a.t);
+  return {
+    dark: lerp(a.dark, b.dark, u),
+    hum: lerp(a.hum, b.hum, u),
+    temp: lerp(a.temp, b.temp, u),
+  };
 }
 
-/** 44s story: daylight → cover sensor → humidity spike → recover. */
-export function simulateAt(ms: number): Reading {
-  const t = ((ms % LOOP_MS) + LOOP_MS) % LOOP_MS / 1000;
-  let dark = 3;
-  let hum = 53;
-  const temp = 27.4 + Math.sin(ms / 4000) * 0.15;
-  const lbase = 230;
-  const hbase = 52;
-  const cut = 62;
-
-  if (t < 8) {
-    dark = lerp(2, 5, t / 8);
-    hum = 53 + Math.sin(t) * 0.6;
-  } else if (t < 16) {
-    const u = ease((t - 8) / 8);
-    dark = lerp(5, 52, u);
-    hum = 53.2;
-  } else if (t < 22) {
-    const u = ease((t - 16) / 6);
-    dark = lerp(52, 78, u);
-    hum = lerp(53.2, 58, u);
-  } else if (t < 30) {
-    const u = ease((t - 22) / 8);
-    dark = lerp(78, 72, u);
-    hum = lerp(58, 81, u);
-  } else if (t < 36) {
-    const u = ease((t - 30) / 6);
-    dark = lerp(72, 48, u);
-    hum = lerp(81, 53, u);
-  } else {
-    const u = ease((t - 36) / 8);
-    dark = lerp(48, 3, u);
-    hum = 53 + Math.sin(t) * 0.4;
-  }
-
-  dark = clamp(dark, 0, 99);
-  const light = Math.round(lbase + dark * 1.4);
+function ledsFromDark(dark: number, ms: number): LedState {
   const p1 = 1;
   const p4 = dark >= 30 ? 0 : 1;
   const p3 = dark >= 55 ? 0 : 1;
-  const p2 = dark >= 85 ? (Math.floor(ms / 800) % 2 === 0 ? 1 : 0) : 1;
-  const alarm: 0 | 1 = hum >= cut ? 1 : 0;
+  const p2 = dark >= 85 ? (Math.floor(ms / 500) % 2 === 0 ? 1 : 0) : 1;
+  return [p1, p2, p3, p4];
+}
 
+export function readingAt(wallMs: number): KitReading {
+  const sample = at(wallMs);
+  const dark = Math.round(sample.dark);
+  const light = LBASE + Math.round(dark * 1.4);
+  const hum = Math.round(sample.hum * 10) / 10;
+  const temp = Math.round(sample.temp * 10) / 10;
+  const alarm: 0 | 1 = hum >= CUT ? 1 : 0;
   return {
-    ms,
+    ms: wallMs,
     light,
-    lbase,
-    dark: Math.round(dark),
-    hum: Math.round(hum * 10) / 10,
-    hbase,
-    cut,
-    temp: Math.round(temp * 10) / 10,
+    lbase: LBASE,
+    dark,
+    hum,
+    hbase: HBASE,
+    cut: CUT,
+    temp,
     alarm,
     muted: 0,
     dht: 1,
-    leds: [p1, p2, p3, p4],
+    leds: ledsFromDark(dark, wallMs),
   };
 }
+
+export function eventsFromTransition(
+  prev: KitReading | null,
+  next: KitReading,
+  id: number,
+): KitEvent[] {
+  if (!prev) {
+    return [
+      {
+        id,
+        at: Date.now(),
+        kind: "INFO",
+        message: "Simulated kit running. Connect the Arduino for real readings.",
+      },
+    ];
+  }
+
+  const events: KitEvent[] = [];
+  const now = Date.now();
+  const push = (kind: KitEvent["kind"], message: string) => {
+    events.push({ id: id + events.length, at: now, kind, message });
+  };
+
+  const wasNight = prev.dark >= 55;
+  const isNight = next.dark >= 55;
+  const p4Was = prev.leds[3];
+  const p4Is = next.leds[3];
+  const p3Was = prev.leds[2];
+  const p3Is = next.leds[2];
+
+  if (p4Was === 1 && p4Is === 0) {
+    push("POWER", `Light falling (${next.dark}% dark). Turned off Comfort.`);
+  }
+  if (p3Was === 1 && p3Is === 0) {
+    push("POWER", "Lunar night. Turned off Science too.");
+  }
+  if (p3Was === 0 && p3Is === 1) {
+    push("POWER", "Light rising. Science is back on.");
+  }
+  if (wasNight && !isNight && p4Is === 1) {
+    push("POWER", "Sunlight is back. All four systems are on.");
+  }
+  if (prev.alarm === 0 && next.alarm === 1) {
+    push(
+      "ALERT",
+      `Hab humidity ${next.hum}%, above the ${next.cut}% cutoff. The buzzer is sounding.`,
+    );
+  }
+  if (prev.alarm === 1 && next.alarm === 0) {
+    push("OK", "Humidity is back under the cutoff.");
+  }
+
+  return events;
+}
+
+export const SIM_TICK_MS = 500;
+export const SIM_LOOP_MS = LOOP_MS;

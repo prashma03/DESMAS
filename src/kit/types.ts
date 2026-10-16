@@ -1,6 +1,6 @@
-export type WorldId = "worlds" | "earth" | "moon" | "mars";
+export type LedState = [number, number, number, number];
 
-export type Reading = {
+export type KitReading = {
   ms: number;
   light: number;
   lbase: number;
@@ -12,22 +12,18 @@ export type Reading = {
   alarm: 0 | 1;
   muted: 0 | 1;
   dht: 0 | 1;
-  leds: [number, number, number, number];
+  leds: LedState;
 };
 
-export type AlertLevel = "INFO" | "POWER" | "OK" | "ALERT" | "HANDLED";
+export type KitEventKind = "POWER" | "ALERT" | "OK" | "INFO";
 
 export type KitEvent = {
-  id: string;
+  id: number;
   at: number;
-  clock: string;
-  level: AlertLevel;
-  text: string;
+  kind: KitEventKind;
+  message: string;
 };
 
-export type KitSource = "simulated" | "arduino";
+export type KitSource = "simulated" | "serial";
 
-export type Sample = { t: number; hum: number };
-
-export const LOOP_MS = 44_000;
-export const TICK_MS = 500;
+export type WorldId = "all" | "earth" | "moon" | "mars";

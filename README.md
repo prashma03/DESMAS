@@ -1,22 +1,48 @@
 # DESMAS
 
-Deep Space Management System — a power and fault manager for an off-grid clinic on Earth, an Artemis base on the Moon, and a future base plus relay ship at Mars. One Arduino kit drives all three views.
+**Deep Space Management System** — a power and fault manager for places that cannot wait for help: an off-grid clinic on Earth, an Artemis base on the Moon, and a relay ship plus future base at Mars. One Arduino kit on the desk runs all three.
 
-This repo is the HackHarvard 2026 web app: a dashboard that matches the design mockup, with a simulated kit until you connect a board over Web Serial (Chrome or Edge).
+Built for HackHarvard 2026 (Hardware for Good + SpaceX AI / Make It Legendary).
 
-## Run
+The station UI is an **Expo / React Native** app (`View`, `Text`, `Pressable`). The kit simulator and Express API are unchanged.
+
+## How it works
+
+The Mega reads a photoresistor and DHT11, sheds loads in priority order, and streams one JSON line twice a second over USB. The app shows those readings on three world dashboards and an AI monitor. Until you plug in a board, a 44-second simulated kit plays the same story.
+
+Priority (never recompute this in the app when hardware is live):
+
+| Dark | What turns off |
+| --- | --- |
+| 30% | P4 Comfort / clinic fan |
+| 55% | P3 Science / clinic lights (“lunar night”) |
+| 85% | P2 Comms / radio (low power, blinks) |
+| always | P1 Life support / vaccine fridge stays on |
+
+## Run locally
 
 ```bash
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-Open the Vite URL, usually `http://localhost:5173`. Use **Connect Arduino** on a Mega streaming JSON at 9600 baud. Until then, a 44-second simulated loop covers the light sensor, then spikes humidity.
+That starts Expo (web) and the API at http://localhost:8787.
 
-Planet look in the UI is stylized and credits Solar System Scope (CC BY 4.0, based on NASA imagery), as in the mockup.
+```bash
+npx expo start
+```
 
-## Stack
+Then open Android, iOS, or web from the Expo menu.
 
-- Vite + React + TypeScript dashboard
-- Shared readings store (simulated kit or Web Serial)
-- Local AI-monitor copy and crew chat fallbacks from the project summary (Grok Voice / Horizons come later)
+Connect Arduino is stubbed in this slice; the simulated kit is live.
+
+## Layout
+
+| Path | Role |
+| --- | --- |
+| `App.tsx` + `src/` | Expo station UI |
+| `server/` | Private API key, Grok routes (next), Mars delay |
+| `firmware/` | Arduino sketch notes and pin map |
+
+Planet textures, when added, should credit Solar System Scope, CC BY 4.0, based on NASA imagery.

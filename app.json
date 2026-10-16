@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "DESMAS",
+    "slug": "desmas",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "scheme": "desmas",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.desmas.station"
+    },
+    "android": {
+      "package": "org.desmas.station"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}

@@ -1,7 +1,9 @@
 node_modules
 dist
-.DS_Store
-*.local
 .env
-.env.*
-!.env.example
+*.log
+.DS_Store
+.vite
+.expo
+web-build
+.tmp-mockup
