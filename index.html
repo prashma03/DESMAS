@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DESMAS Voice Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background:
+        radial-gradient(circle at 20% 20%, #1a2744 0%, transparent 40%),
+        radial-gradient(circle at 80% 80%, #122033 0%, transparent 45%),
+        linear-gradient(180deg, #070b14 0%, #0b1220 100%);
+      color: #e8eef8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: min(520px, 100%);
+      background: rgba(12, 20, 36, 0.92);
+      border: 1px solid #3a5a8a;
+      border-radius: 16px;
+      padding: 32px 28px;
+      box-shadow: 0 0 40px rgba(70, 140, 255, 0.12);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+      letter-spacing: 0.08em;
+      color: #9ecbff;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      font-size: 0.85rem;
+      color: #7f93b0;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .message {
+      margin: 0 0 24px;
+      padding: 16px;
+      background: #101a2c;
+      border-left: 4px solid #5fd0ff;
+      border-radius: 8px;
+      line-height: 1.5;
+      text-align: left;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #061018;
+      background: #7ec8ff;
+    }
+
+    button:hover {
+      background: #a6dcff;
+    }
+
+    button.secondary {
+      background: #31445f;
+      color: #d7e4f5;
+    }
+
+    button.secondary:hover {
+      background: #3d5576;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin: 18px 0 0;
+      min-height: 1.4em;
+      font-size: 0.95rem;
+      color: #9fb3cc;
+    }
+
+    .status.error {
+      color: #ff8b8b;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>DESMAS Voice Test</h1>
+    <p class="subtitle">Browser speech check</p>
+    <p id="alert-message" class="message">
+      Warning: Life support power is stable. Crew, please check the station status.
+    </p>
+    <div class="actions">
+      <button id="speak-btn" type="button">Speak Alert</button>
+      <button id="stop-btn" class="secondary" type="button">Stop Voice</button>
+    </div>
+    <p id="status" class="status" role="status"></p>
+  </main>
+
+  <script>
+    const messageEl = document.getElementById("alert-message");
+    const speakBtn = document.getElementById("speak-btn");
+    const stopBtn = document.getElementById("stop-btn");
+    const statusEl = document.getElementById("status");
+    const speechSupported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", Boolean(isError));
+    }
+
+    function stopSpeech() {
+      if (!speechSupported) {
+        return;
+      }
+      window.speechSynthesis.cancel();
+      setStatus("Voice stopped.");
+    }
+
+    function speakAlert() {
+      if (!speechSupported) {
+        setStatus("Speech synthesis is not available in this browser.", true);
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(messageEl.textContent.trim());
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      utterance.onstart = function () {
+        setStatus("Speaking alert...");
+      };
+
+      utterance.onend = function () {
+        setStatus("Finished speaking.");
+      };
+
+      utterance.onerror = function (event) {
+        if (event.error === "interrupted" || event.error === "canceled") {
+          setStatus("Voice stopped.");
+          return;
+        }
+        setStatus("Could not speak the alert: " + (event.error || "unknown error") + ".", true);
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        setStatus("Could not start speech synthesis. Try another browser.", true);
+      }
+    }
+
+    speakBtn.addEventListener("click", speakAlert);
+    stopBtn.addEventListener("click", stopSpeech);
+
+    if (!speechSupported) {
+      speakBtn.disabled = true;
+      stopBtn.disabled = true;
+      setStatus("Speech synthesis is not available in this browser.", true);
+    } else {
+      setStatus("Ready. Click Speak Alert to hear the message.");
+    }
+  </script>
+</body>
+</html>
