@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { advanceIntro, type IntroAdvance, type IntroPhase } from "../introSession";
 
-const VIDEO_1 = require("desmas-intro-video-1") as number;
-const VIDEO_2 = require("desmas-intro-video-2") as number;
+const VIDEO_1 = require("../../assets/Videoes/vid-1.mp4") as number;
+const VIDEO_2 = require("../../assets/Videoes/vid-2.mp4") as number;
 
 const sans = Platform.OS === "web" ? "Geist, sans-serif" : undefined;
 const REVEAL_MS = 720;

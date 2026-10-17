@@ -1,9 +1,4 @@
-declare module "desmas-intro-video-1" {
-  const asset: number;
-  export = asset;
-}
-
-declare module "desmas-intro-video-2" {
+declare module "*.mp4" {
   const asset: number;
   export = asset;
 }
