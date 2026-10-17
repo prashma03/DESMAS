@@ -20,6 +20,7 @@ import {
   solarOf,
   Split,
   StatRow,
+  systemLine,
 } from "./dashboard";
 
 const SYSTEMS = [
@@ -53,7 +54,7 @@ export function EarthPage({
     { title: "Fan", line: on(3) ? "ON · P4" : "OFF · P4", color: colors.ledRed, on: on(3), style: { right: "24%" as const, top: "34%" as const } },
     { title: "Battery", line: `Estimate · ${battery}%`, color: colors.gold, on: true, style: { right: "18%" as const, top: "52%" as const } },
     { title: "Lights", line: on(2) ? "ON · P3" : "OFF · P3", color: colors.ledYellow, on: on(2), style: { left: "46%" as const, top: "58%" as const } },
-    { title: "Radio", line: on(1) ? "ON · P2" : "OFF · P2", color: colors.ledBlue, on: on(1), style: { right: "8%" as const, top: "16%" as const } },
+    { title: "Radio", line: systemLine(reading.leds[1], "ON · P2", "OFF · P2"), color: colors.ledBlue, on: on(1), style: { right: "8%" as const, top: "16%" as const } },
   ];
 
   return (
@@ -104,7 +105,8 @@ export function EarthPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm."
+            muted={reading.muted}
+            note="Cover the light sensor for sunset. Cover it fully for low-power radio. Breathe on the DHT11 to test the store room alarm."
           />
         )}
       </View>
@@ -121,7 +123,8 @@ export function EarthPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm."
+            muted={reading.muted}
+            note="Cover the light sensor for sunset. Cover it fully for low-power radio. Breathe on the DHT11 to test the store room alarm."
           />
         </>
       ) : null}
@@ -137,18 +140,36 @@ export function EarthPage({
         ]}
       />
 
-      <Lower nav={<SideNav label="At this clinic" items={["Power", "Same four LEDs", "Alert feed", "AI monitor"]} />}>
-        <PowerBlock
-          eyebrow="Power priority · set by the Arduino"
-          title="Keep the vaccines cold until sunrise"
-          systems={SYSTEMS}
-          leds={reading.leds}
-          solar={solar}
-          battery={battery}
-        />
+      <Lower
+        nav={
+          <SideNav
+            label="At this clinic"
+            items={[
+              { id: "power", label: "Power" },
+              { id: "leds", label: "Same four LEDs" },
+              { id: "feed", label: "Alert feed" },
+              { id: "monitor", label: "AI monitor" },
+            ]}
+          />
+        }
+      >
+        <View nativeID="power">
+          <PowerBlock
+            eyebrow="Power priority · set by the Arduino"
+            title="Keep the vaccines cold until sunrise"
+            systems={SYSTEMS}
+            leds={reading.leds}
+            solar={solar}
+            battery={battery}
+          />
+        </View>
         <Split>
-          <LedMap leds={reading.leds} />
-          <AlertFeed world="earth" events={events} />
+          <View nativeID="leds" style={styles.slot}>
+            <LedMap leds={reading.leds} />
+          </View>
+          <View nativeID="feed" style={styles.slot}>
+            <AlertFeed world="earth" events={events} />
+          </View>
         </Split>
         <AiMonitor world="earth" reading={reading} source={source} />
       </Lower>
@@ -166,6 +187,7 @@ function Tree({ left }: { left: `${number}%` }) {
 }
 
 const styles = StyleSheet.create({
+  slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
   scene: { height: 460, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
   ground: { position: "absolute", left: 0, right: 0, bottom: 0, height: "34%" },
   peak: {

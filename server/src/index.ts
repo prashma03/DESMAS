@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { diagnose } from "./diagnose.js";
 import { askGrok } from "./grok.js";
 import { marsDelay } from "./horizons.js";
 
@@ -31,6 +32,10 @@ app.get("/api/mars-delay", async (_req, res) => {
   res.json(await marsDelay());
 });
 
+app.post("/api/diagnose", (req, res) => {
+  void diagnose(req, res);
+});
+
 app.post("/api/grok", async (req, res) => {
   const question = typeof req.body?.question === "string" ? req.body.question.trim().slice(0, 500) : "";
   const world = typeof req.body?.world === "string" && WORLDS.has(req.body.world) ? req.body.world : "earth";
@@ -42,7 +47,7 @@ app.post("/api/grok", async (req, res) => {
     const answer = await askGrok({ world, question, reading: req.body?.reading });
     res.json({ answer, source: "grok" });
   } catch (err) {
-    const missing = err instanceof Error && err.message === "missing-key";
+    const missing = err instanceof Error && (err.message === "missing-key" || err.name === "MissingKeyError");
     res.status(missing ? 503 : 502).json({
       error: missing ? "XAI_API_KEY is not set on the server" : "Grok request failed",
     });

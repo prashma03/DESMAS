@@ -1,9 +1,12 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, View } from "react-native";
 import { AllWorlds } from "./src/components/AllWorlds";
 import { WorldView } from "./src/components/WorldView";
+import type { EarthDelay } from "./src/findings";
+import { kitStore } from "./src/kit/store";
 import type { WorldId } from "./src/kit/types";
+import { board } from "./src/serial/board";
 import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
 import { useKit } from "./src/useKit";
@@ -27,8 +30,10 @@ export default function App() {
   const kit = useKit();
   const { compact, narrow } = useScreen();
   const [world, setWorld] = useState<WorldId>("all");
-  const [marsDelay, setMarsDelay] = useState("3 to 22 min");
+  const [delay, setDelay] = useState<EarthDelay | null>(null);
   const live = kit.source === "serial";
+  const marsDelay = delay ? `${delay.oneWayMin.toFixed(1)} min` : "3 to 22 min";
+  const uptime = live ? formatUptime(Date.now() - kit.since) : "";
   const androidTop = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) : 0;
 
   useEffect(() => {
@@ -41,17 +46,33 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
+  useEffect(() => board.watch(), []);
+
   useEffect(() => {
-    fetch(`${API}/api/mars-delay`)
-      .then((r) => r.json())
-      .then((d: { oneWaySeconds?: number }) => {
-        if (!d.oneWaySeconds) return;
-        const minutes = d.oneWaySeconds / 60;
-        setMarsDelay(minutes >= 1 ? `${minutes.toFixed(1)} min` : `${Math.round(d.oneWaySeconds)} s`);
-      })
-      .catch(() => {
-        /* server optional */
-      });
+    let stop = false;
+    const load = () => {
+      fetch(`${API}/api/mars-delay`)
+        .then((r) => r.json())
+        .then((d: { oneWayMin?: number; roundTripMin?: number; oneWaySeconds?: number; au?: number }) => {
+          if (stop) return;
+          if (typeof d.oneWayMin === "number" && typeof d.roundTripMin === "number") {
+            setDelay({ oneWayMin: d.oneWayMin, roundTripMin: d.roundTripMin, au: d.au });
+            return;
+          }
+          if (!d.oneWaySeconds) return;
+          const oneWayMin = d.oneWaySeconds / 60;
+          setDelay({ oneWayMin, roundTripMin: oneWayMin * 2, au: d.au });
+        })
+        .catch(() => {
+          /* server optional */
+        });
+    };
+    load();
+    const timer = setInterval(load, 60 * 60 * 1000);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
   }, []);
 
   return (
@@ -85,7 +106,7 @@ export default function App() {
           {compact ? (
             <View style={[styles.sim, live ? styles.simLive : null, styles.simCompact]}>
               <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
-              <Text numberOfLines={1} style={styles.simTxt}>{live ? "Arduino live" : narrow ? "Simulated" : "Simulated kit"}</Text>
+              <Text numberOfLines={1} style={styles.simTxt}>{live ? `Live · ${uptime}` : narrow ? "Simulated" : "Simulated kit"}</Text>
             </View>
           ) : null}
         </View>
@@ -104,9 +125,7 @@ export default function App() {
           live ? null : (
             <Pressable
               style={[styles.connect, styles.connectCompact]}
-              onPress={() =>
-                Alert.alert("Connect Arduino", "Open this page in Chrome or Edge, plug in the board, and connect when serial is enabled. The simulated kit is running now.")
-              }
+              onPress={() => void board.connect()}
             >
               <Text style={styles.connectTxt}>Connect Arduino</Text>
             </Pressable>
@@ -115,14 +134,12 @@ export default function App() {
           <View style={styles.tools}>
             <View style={[styles.sim, live ? styles.simLive : null]}>
               <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
-              <Text style={styles.simTxt}>{live ? "Arduino live" : "Simulated kit"}</Text>
+              <Text style={styles.simTxt}>{live ? `Arduino live · ${uptime}` : "Simulated kit"}</Text>
             </View>
             {live ? null : (
               <Pressable
                 style={styles.connect}
-                onPress={() =>
-                  Alert.alert("Connect Arduino", "Open this page in Chrome or Edge, plug in the board, and connect when serial is enabled. The simulated kit is running now.")
-                }
+                onPress={() => void board.connect()}
               >
                 <Text style={styles.connectTxt}>Connect Arduino</Text>
               </Pressable>
@@ -130,6 +147,14 @@ export default function App() {
           </View>
         )}
       </View>
+      {kit.notice ? (
+        <View style={styles.notice}>
+          <Text style={styles.noticeTxt}>{kit.notice}</Text>
+          <Pressable accessibilityLabel="Dismiss message" onPress={() => kitStore.setNotice("")} style={styles.noticeClose}>
+            <Text style={styles.noticeX}>×</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={shell.stage}>
         {world === "all" ? (
           <AllWorlds reading={kit.reading} source={kit.source} marsDelay={marsDelay} onOpen={setWorld} />
@@ -139,7 +164,8 @@ export default function App() {
             reading={kit.reading}
             history={kit.history}
             events={kit.events}
-            marsDelay={marsDelay}
+            lines={kit.lines}
+            delay={delay}
             source={kit.source}
           />
         )}
@@ -148,7 +174,30 @@ export default function App() {
   );
 }
 
+function formatUptime(ms: number) {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s < 100 ? `${s} s` : `${Math.round(s / 60)} min`;
+}
+
 const styles = StyleSheet.create({
+  notice: {
+    zIndex: 2,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingLeft: 14,
+    paddingRight: 6,
+    borderRadius: 14,
+    backgroundColor: "rgba(242,181,68,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(242,181,68,0.35)",
+  },
+  noticeTxt: { flex: 1, color: colors.gold, fontFamily: sans, fontSize: 14, lineHeight: 20 },
+  noticeClose: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  noticeX: { color: colors.gold, fontSize: 18 },
   topbar: {
     zIndex: 2,
     flexDirection: "row",

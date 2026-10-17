@@ -21,6 +21,7 @@ import {
   solarOf,
   Split,
   StatRow,
+  systemLine,
 } from "./dashboard";
 
 const SYSTEMS = [
@@ -35,11 +36,13 @@ export function MoonPage({
   history,
   events,
   source,
+  lines,
 }: {
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
   source: KitSource;
+  lines: string[];
 }) {
   const { narrow } = useScreen();
   const solar = solarOf(reading.dark);
@@ -48,7 +51,7 @@ export function MoonPage({
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
   const tags = [
-    { title: "Comms tower", line: on(1) ? "ON · link to Earth" : "OFF · link to Earth", color: colors.ledBlue, on: on(1), style: { left: "42%" as const, top: "18%" as const } },
+    { title: "Comms tower", line: systemLine(reading.leds[1], "ON · link to Earth", "OFF · link to Earth"), color: colors.ledBlue, on: on(1), style: { left: "42%" as const, top: "18%" as const } },
     { title: "Science lab", line: on(2) ? "ON" : "OFF", color: colors.ledYellow, on: on(2), style: { left: "18%" as const, top: "42%" as const } },
     { title: "Hab A · life support", line: on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF", color: colors.green, on: on(0), style: { left: "40%" as const, top: "36%" as const } },
     { title: "Comfort module", line: on(3) ? "ON" : "OFF", color: colors.ledRed, on: on(3), style: { right: "28%" as const, top: "48%" as const } },
@@ -89,7 +92,8 @@ export function MoonPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="Cover the light sensor for lunar night. Breathe on the DHT11 to set off the humidity alarm."
+            muted={reading.muted}
+            note="Cover the light sensor for lunar night. Cover it fully so comms drop to low power. Breathe on the DHT11 to set off the humidity alarm."
           />
         )}
       </View>
@@ -107,7 +111,8 @@ export function MoonPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="Cover the light sensor for lunar night. Breathe on the DHT11 to set off the humidity alarm."
+            muted={reading.muted}
+            note="Cover the light sensor for lunar night. Cover it fully so comms drop to low power. Breathe on the DHT11 to set off the humidity alarm."
           />
         </>
       ) : null}
@@ -123,20 +128,39 @@ export function MoonPage({
         ]}
       />
 
-      <Lower nav={<SideNav label="On this base" items={["Power", "Hab A", "Alert feed", "Raw serial", "AI monitor"]} />}>
-        <PowerBlock
-          eyebrow="Power priority · set by the Arduino"
-          title="What stays on when the sun goes down"
-          systems={SYSTEMS}
-          leds={reading.leds}
-          solar={solar}
-          battery={battery}
-        />
+      <Lower
+        nav={
+          <SideNav
+            label="On this base"
+            items={[
+              { id: "power", label: "Power" },
+              { id: "humidity", label: "Hab A" },
+              { id: "feed", label: "Alert feed" },
+              { id: "serial", label: "Raw serial" },
+              { id: "monitor", label: "AI monitor" },
+            ]}
+          />
+        }
+      >
+        <View nativeID="power">
+          <PowerBlock
+            eyebrow="Power priority · set by the Arduino"
+            title="What stays on when the sun goes down"
+            systems={SYSTEMS}
+            leds={reading.leds}
+            solar={solar}
+            battery={battery}
+          />
+        </View>
         <Split>
-          <HumidityChart history={history} reading={reading} />
-          <AlertFeed world="moon" events={events} />
+          <View nativeID="humidity" style={styles.slot}>
+            <HumidityChart history={history} reading={reading} />
+          </View>
+          <View nativeID="feed" style={styles.slot}>
+            <AlertFeed world="moon" events={events} />
+          </View>
         </Split>
-        <SerialLog history={history} />
+        <SerialLog lines={lines} live={source === "serial"} />
         <AiMonitor world="moon" reading={reading} source={source} />
       </Lower>
     </Page>
@@ -144,6 +168,7 @@ export function MoonPage({
 }
 
 const styles = StyleSheet.create({
+  slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
   scene: { height: 460, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
   ground: { position: "absolute", left: "-10%", right: "-10%", bottom: -30, height: "42%", borderTopLeftRadius: 220, borderTopRightRadius: 220, backgroundColor: "#3a3e46" },
   crater: { position: "absolute", left: "8%", bottom: "18%", width: 90, height: 36, borderRadius: 40, backgroundColor: "#2c3038" },

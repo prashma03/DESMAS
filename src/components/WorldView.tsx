@@ -1,3 +1,4 @@
+import type { EarthDelay } from "../findings";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { EarthPage } from "./EarthPage";
 import { MarsPage } from "./MarsPage";
@@ -8,17 +9,19 @@ export function WorldView({
   reading,
   history,
   events,
-  marsDelay,
+  lines,
+  delay,
   source,
 }: {
   world: "earth" | "moon" | "mars";
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
-  marsDelay: string;
+  lines: string[];
+  delay: EarthDelay | null;
   source: KitSource;
 }) {
   if (world === "earth") return <EarthPage reading={reading} history={history} events={events} source={source} />;
-  if (world === "moon") return <MoonPage reading={reading} history={history} events={events} source={source} />;
-  return <MarsPage reading={reading} history={history} events={events} source={source} marsDelay={marsDelay} />;
+  if (world === "moon") return <MoonPage reading={reading} history={history} events={events} lines={lines} source={source} />;
+  return <MarsPage reading={reading} history={history} events={events} source={source} delay={delay} />;
 }

@@ -2,141 +2,50 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { KitReading, KitSource, WorldId } from "../kit/types";
 import { API } from "../api";
+import { fallbackAnswer, suggestedQuestions, type EarthDelay } from "../findings";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
+import { useDiagnosis } from "../useDiagnosis";
 import { speakAlert, stopVoice, voiceSupported } from "../voice";
-import { mono, sans, solarOf } from "./dashboard";
+import { mono, sans } from "./dashboard";
 
-const QUESTIONS: Record<Exclude<WorldId, "all">, string[]> = {
-  earth: ["Will the fridge stay cold until sunrise?", "Can we turn the fan back on?", "Which readings are you watching?"],
-  moon: ["Can we turn Science back on tonight?", "Do we need to call Earth about this?", "Which readings are you watching?"],
-  mars: ["Should we wait for Earth before acting?", "What did the relay ship fix on its own?", "Which readings are you watching?"],
+const TONE: Record<string, string> = {
+  alert: colors.alert,
+  watch: colors.watch,
+  ok: colors.ok,
+  info: colors.ledBlue,
 };
-
-function levelOf(world: Exclude<WorldId, "all">, r: KitReading) {
-  if (r.alarm) return "ALERT" as const;
-  if (world === "mars" && r.dark >= 85) return "ALERT" as const;
-  if (r.dark >= 55 || (world === "earth" && r.dark >= 30) || (world === "mars" && r.dark >= 30)) return "WATCH" as const;
-  return "OK" as const;
-}
-
-function finding(world: Exclude<WorldId, "all">, r: KitReading) {
-  const hum = Math.round(r.hum);
-  const solar = solarOf(r.dark);
-  if (r.alarm) {
-    if (world === "earth") {
-      return {
-        title: "Humidity is rising in the vaccine store room",
-        body: `Humidity is ${hum}% while temperature stayed near ${r.temp.toFixed(1)} °C. Shut the door and window.`,
-        steps: ["Shut the store room door and window.", "Place silica gel packs near the fridge.", "Watch humidity until it is under the cutoff."],
-        part: "Silica gel packs",
-        stock: "In the clinic store",
-      };
-    }
-    if (world === "mars") {
-      return {
-        title: "Hab humidity is above cutoff during the storm",
-        body: `Humidity is ${hum}% at ${r.temp.toFixed(1)} °C. Keep Science off until solar is healthier.`,
-        steps: ["Leave Science off while the storm is thick.", "Check the hab dehumidifier.", "Watch humidity for 10 minutes."],
-        part: null,
-        stock: "",
-      };
-    }
-    return {
-      title: "The dehumidifier fan in Hab A has likely stopped",
-      body: `Humidity rose from ${Math.round(r.hbase)}% to ${hum}% while the temperature stayed near ${r.temp.toFixed(1)} °C. That pattern means the air is not being dried. It is not a heating problem.`,
-      steps: [
-        "Check whether the dehumidifier fan in Hab A is spinning.",
-        "If it has stopped, switch it off and swap in the spare fan module.",
-        "Switch it back on and check for airflow at the vent.",
-        "Watch humidity for 10 minutes. It should fall below 62%.",
-      ],
-      part: "Spare fan module",
-      stock: "2 in Storage B",
-    };
-  }
-  if (r.dark >= 55) {
-    return {
-      title: world === "mars" ? "Dust is cutting solar input" : world === "earth" ? "Night: the board is shedding load" : "Lunar night: Science and Comfort are off",
-      body: `Light sensor is ${Math.round(r.dark)}% dark. Priority 1 stays on. The board turns lower loads back on as it gets brighter.`,
-      steps: [] as string[],
-      part: null,
-      stock: "",
-    };
-  }
-  if (world === "earth") {
-    return {
-      title: "Daylight: the battery is charging",
-      body: `Solar input is ${solar}% and ${r.leds.filter((v) => v > 0).length} systems are on. Humidity is ${hum}%, under the ${Math.round(r.cut)}% cutoff.`,
-      steps: [] as string[],
-      part: null,
-      stock: "",
-    };
-  }
-  if (world === "mars") {
-    return {
-      title: "Solar power is normal",
-      body: `Solar input is ${solar}%. The relay ship handled two faults on its own today. Nothing needs the crew.`,
-      steps: [] as string[],
-      part: null,
-      stock: "",
-    };
-  }
-  return {
-    title: "All readings are in the normal range",
-    body: `Nothing needs attention right now. Humidity is ${hum}%, under the ${Math.round(r.cut)}% cutoff. If a reading crosses its cutoff, a plan appears here.`,
-    steps: [] as string[],
-    part: null,
-    stock: "",
-  };
-}
-
-function cannedAnswer(world: Exclude<WorldId, "all">, q: string, r: KitReading) {
-  if (q.toLowerCase().includes("science")) {
-    return r.leds[2]
-      ? `It is already on. The light sensor reads ${Math.round(r.dark)}% dark, under the 55% limit for lunar night.`
-      : "Not yet. With Science off, the battery lasts until sunrise. The board turns it back on by itself when the light sensor drops below 55% dark.";
-  }
-  if (q.toLowerCase().includes("fridge")) {
-    return "Yes, if nothing else changes. With the fan off, the battery lasts about 11 hours. The fridge is priority 1, so it is the last thing the board turns off.";
-  }
-  if (q.toLowerCase().includes("fan")) {
-    return r.leds[3]
-      ? "The fan is already on. It is the first load the board turns off when the light sensor reaches 30% dark."
-      : "Not yet. The fan is off so the fridge stays cold. The board turns it back on when the sensor drops below 30% dark.";
-  }
-  if (q.toLowerCase().includes("earth before") || q.toLowerCase().includes("call earth")) {
-    return "No. A reply could take up to 44 minutes. These power rules were tested during lunar nights on the Moon, so the base can follow them on its own.";
-  }
-  if (q.toLowerCase().includes("relay")) {
-    return "Relay ship: radio A stopped answering, so it switched to radio B. A camera heater fault turned the camera off to save power.";
-  }
-  if (q.toLowerCase().includes("watching") || q.toLowerCase().includes("reading")) {
-    return `Humidity ${Math.round(r.hum)}% (cutoff ${Math.round(r.cut)}%), light sensor ${Math.round(r.dark)}% dark, temperature ${r.temp.toFixed(1)} °C, LEDs ${r.leds.join("")}.`;
-  }
-  return "The onboard fallback is watching humidity, the light sensor, and which LEDs the board left on. Ask about readings, power, or parts.";
-}
 
 export function AiMonitor({
   world,
   reading,
   source,
+  delay,
 }: {
   world: Exclude<WorldId, "all">;
   reading: KitReading;
   source: KitSource;
+  delay?: EarthDelay;
 }) {
-  const info = finding(world, reading);
-  const level = levelOf(world, reading);
+  const { finding: info, grok } = useDiagnosis(world, reading);
+  const level = info.level;
+  const findingKey = `${info.level}|${info.title}|${info.steps.join("|")}`;
   const [done, setDone] = useState<Record<number, boolean>>({});
   const [draft, setDraft] = useState("");
+  const [askError, setAskError] = useState(false);
   const [pending, setPending] = useState(false);
   const [via, setVia] = useState<"grok" | "fallback">("fallback");
+  const questions = suggestedQuestions(world, reading, delay);
   const [log, setLog] = useState(() => {
-    const q = QUESTIONS[world][0];
-    return [{ q, a: cannedAnswer(world, q, reading) }];
+    const first = suggestedQuestions(world, reading, delay)[0];
+    return [{ q: first.q, a: first.a }];
   });
   const finished = info.steps.filter((_, i) => done[i]).length;
+  const progress = info.steps.length ? Math.round((finished / info.steps.length) * 100) : 0;
+
+  useEffect(() => {
+    setDone({});
+  }, [findingKey]);
   const canSpeak = voiceSupported();
   const [voice, setVoice] = useState(() =>
     canSpeak
@@ -163,11 +72,16 @@ export function AiMonitor({
 
   const ask = async (q: string) => {
     const text = q.trim();
-    if (!text || pending) return;
+    if (!text) {
+      setAskError(true);
+      return;
+    }
+    if (pending) return;
+    setAskError(false);
     setPending(true);
     setDraft("");
     setLog((prev) => [{ q: text, a: "Asking Grok…" }, ...prev].slice(0, 4));
-    const local = cannedAnswer(world, text, reading);
+    const local = fallbackAnswer(world, text, reading, info, delay);
     try {
       const res = await fetch(`${API}/api/grok`, {
         method: "POST",
@@ -220,7 +134,7 @@ export function AiMonitor({
       <View style={styles.head}>
         <View style={styles.headLeft}>
           <Text style={styles.brand}>AI monitor</Text>
-          <Text style={styles.pill}>{via === "grok" ? "Grok" : "Onboard fallback"}</Text>
+          <Text style={styles.pill}>{grok || via === "grok" ? "Grok" : "Onboard fallback"}</Text>
         </View>
         <Text style={styles.rate}>{rate}</Text>
       </View>
@@ -250,33 +164,36 @@ export function AiMonitor({
       </View>
       <View style={styles.chips}>
         <Text style={styles.kicker}>Based on</Text>
-        <Chip text={`Humidity ${Math.round(reading.hum)}%`} color={reading.alarm ? colors.alert : colors.ledBlue} />
-        <Chip text={`Cutoff ${Math.round(reading.cut)}%`} color={colors.gold} />
-        <Chip text={`Temperature ${reading.temp.toFixed(1)} °C`} color={colors.ledBlue} />
+        {info.evidence.map((item) => (
+          <Chip key={item.text} text={item.text} color={TONE[item.tone] ?? colors.ledBlue} />
+        ))}
       </View>
       <View style={styles.columns}>
-        <View style={styles.box}>
+        <View nativeID="monitor" style={styles.box}>
           <View style={styles.head}>
             <Text style={styles.kicker}>Troubleshooting plan</Text>
             {info.steps.length ? <Text style={styles.kicker}>{`${finished} / ${info.steps.length} done`}</Text> : null}
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
           {info.steps.length ? (
             info.steps.map((step, i) => (
               <Pressable key={step} style={styles.step} onPress={() => setDone((prev) => ({ ...prev, [i]: !prev[i] }))}>
                 <View style={[styles.check, done[i] ? styles.checkOn : null]} />
-                <Text style={styles.stepTxt}>{`${String(i + 1).padStart(2, "0")}   ${step}`}</Text>
+                <Text style={[styles.stepTxt, done[i] ? styles.stepDone : null]}>{`${String(i + 1).padStart(2, "0")}   ${step}`}</Text>
               </Pressable>
             ))
           ) : (
             <Text style={styles.muted}>No plan needed right now. One appears here as soon as a reading crosses its cutoff.</Text>
           )}
-          {info.part ? (
-            <View style={styles.part}>
-              <Text style={styles.stock}>In stock</Text>
-              <Text style={styles.partName}>{info.part}</Text>
-              <Text style={styles.muted}>{info.stock}</Text>
+          {info.parts.map((part) => (
+            <View key={part.name} style={[styles.part, part.inStock ? null : styles.partOut]}>
+              <Text style={[styles.stock, part.inStock ? null : styles.stockOut]}>{part.inStock ? "In stock" : "Not in stock"}</Text>
+              <Text style={styles.partName}>{part.name}</Text>
+              <Text style={styles.muted}>{part.detail}</Text>
             </View>
-          ) : null}
+          ))}
         </View>
         <View style={styles.box}>
           <Text style={styles.kicker}>Ask the crew's AI</Text>
@@ -291,16 +208,19 @@ export function AiMonitor({
             </View>
           ))}
           <View style={styles.suggest}>
-            {QUESTIONS[world].map((q) => (
-              <Pressable key={q} style={styles.suggestBtn} onPress={() => ask(q)}>
-                <Text style={styles.suggestTxt}>{q}</Text>
+            {questions.map((item) => (
+              <Pressable key={item.q} style={styles.suggestBtn} onPress={() => ask(item.q)}>
+                <Text style={styles.suggestTxt}>{item.q}</Text>
               </Pressable>
             ))}
           </View>
           <View style={styles.askRow}>
             <TextInput
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={(text) => {
+                setDraft(text);
+                if (text.trim()) setAskError(false);
+              }}
               placeholder="Ask about readings, power or parts"
               placeholderTextColor={colors.dim}
               style={styles.input}
@@ -310,6 +230,7 @@ export function AiMonitor({
               <Text style={styles.sendTxt}>↑</Text>
             </Pressable>
           </View>
+          {askError ? <Text style={styles.askError}>Type a question first.</Text> : null}
         </View>
       </View>
     </View>
@@ -373,6 +294,12 @@ const styles = StyleSheet.create({
   check: { width: 16, height: 16, borderRadius: 4, borderWidth: 1, borderColor: colors.dim, marginTop: 2 },
   checkOn: { backgroundColor: colors.green, borderColor: colors.green },
   stepTxt: { color: colors.ink, flex: 1, fontSize: 14, lineHeight: 20, fontFamily: sans },
+  stepDone: { color: colors.dim, textDecorationLine: "line-through" },
+  progressTrack: { height: 4, borderRadius: 99, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.08)" },
+  progressFill: { height: "100%", borderRadius: 99, backgroundColor: colors.ledBlue },
+  askError: { color: colors.alert, fontFamily: sans, fontSize: 13 },
+  partOut: { borderColor: "rgba(242,181,68,0.35)", backgroundColor: "rgba(242,181,68,0.08)" },
+  stockOut: { color: colors.gold },
   muted: { color: colors.dim, fontSize: 13, lineHeight: 18, fontFamily: sans },
   part: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "rgba(134,239,172,0.35)", backgroundColor: "rgba(134,239,172,0.08)", borderRadius: 12, padding: 10 },
   stock: { color: colors.ok, fontFamily: mono, fontSize: 11, letterSpacing: 0.6 },

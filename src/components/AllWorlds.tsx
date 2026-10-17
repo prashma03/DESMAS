@@ -1,7 +1,35 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useScreen } from "../layout";
 import Svg, { Path } from "react-native-svg";
+
+const SignalPath = Animated.createAnimatedComponent(Path);
+
+const WIDE = {
+  moon: "M175 138 Q335 52 500 122",
+  mars: "M175 138 Q500 6 830 126",
+};
+const NARROW = {
+  moon: "M210 78 Q500 18 790 78",
+  mars: "M230 96 Q500 40 500 230",
+};
+
+function useDash(duration: number, distance: number) {
+  const offset = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.timing(offset, {
+        toValue: -distance,
+        duration,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [distance, duration, offset]);
+  return offset;
+}
 import type { KitReading, KitSource } from "../kit/types";
 import { colors } from "../theme";
 import { mono, PlanetFill, sans, stormLabel } from "./dashboard";
@@ -90,16 +118,7 @@ export function AllWorlds({
         style={[styles.theater, { height: narrow ? 520 : 460 }]}
         {...({ onMouseLeave: () => setHover(null) } as object)}
       >
-        {hover || narrow ? null : (
-          <View style={styles.arcs} pointerEvents="none">
-            <Svg width="100%" height="220" viewBox="0 0 1000 220">
-              <Path d="M180 170 Q360 20 500 150" stroke="rgba(158,208,255,0.55)" strokeWidth="1.4" strokeDasharray="3 7" fill="none" />
-              <Path d="M180 170 Q500 -30 820 160" stroke="rgba(255,163,107,0.5)" strokeWidth="1.4" strokeDasharray="3 7" fill="none" />
-            </Svg>
-            <Text style={[styles.arcLabel, { left: "30%", top: 28, color: colors.blue }]}>Earth ↔ Moon · 1.3 s</Text>
-            <Text style={[styles.arcLabel, { left: "38%", top: 0, color: "#FFC59E" }]}>{`Earth ↔ Mars · ${marsDelay}`}</Text>
-          </View>
-        )}
+        {hover ? null : <SignalLinks narrow={narrow} marsDelay={marsDelay} />}
         {ORDER.map((id) => (
           <GlobeSlot
             key={id}
@@ -126,6 +145,28 @@ export function AllWorlds({
         <Text style={styles.footTxt}>Planet textures: Solar System Scope, CC BY 4.0, based on NASA imagery</Text>
       </View>
     </ScrollView>
+  );
+}
+
+function SignalLinks({ narrow, marsDelay }: { narrow: boolean; marsDelay: string }) {
+  const dots = useDash(1600, 16);
+  const moon = useDash(1300, 380);
+  const mars = useDash(7000, 760);
+  const paths = narrow ? NARROW : WIDE;
+  const moonReturn = Animated.add(moon, -190);
+  const marsLabel = /min|s$/i.test(marsDelay) && !/3 to 22/i.test(marsDelay) ? marsDelay : "3 TO 22 MIN";
+  return (
+    <View style={[styles.arcs, narrow ? styles.arcsNarrow : null]} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox={narrow ? "0 0 1000 280" : "0 0 1000 150"} preserveAspectRatio="none">
+        <SignalPath d={paths.moon} stroke="rgba(158,208,255,0.5)" strokeWidth={1.4} fill="none" strokeDasharray="2 7" strokeDashoffset={dots} />
+        <SignalPath d={paths.mars} stroke="rgba(255,163,107,0.45)" strokeWidth={1.4} fill="none" strokeDasharray="2 7" strokeDashoffset={dots} />
+        <SignalPath d={paths.moon} stroke="#E7F3FF" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="11 900" strokeDashoffset={moon} />
+        <SignalPath d={paths.moon} stroke="#F7C873" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="11 900" strokeDashoffset={moonReturn} />
+        <SignalPath d={paths.mars} stroke="#FFC59E" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="12 1100" strokeDashoffset={mars} />
+      </Svg>
+      <Text style={[styles.arcLabel, narrow ? styles.moonLabelNarrow : styles.moonLabel]}>EARTH ↔ MOON · 1.3 S</Text>
+      <Text style={[styles.arcLabel, narrow ? styles.marsLabelNarrow : styles.marsLabel]}>{`EARTH ↔ MARS · ${marsLabel.toUpperCase()}`}</Text>
+    </View>
   );
 }
 
@@ -289,8 +330,13 @@ const styles = StyleSheet.create({
   h1: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 44, letterSpacing: -1, textAlign: "center", width: "100%" },
   sub: { color: colors.muted, fontFamily: sans, fontSize: 17, lineHeight: 24, textAlign: "center", width: "100%", maxWidth: 640 },
   theater: { height: 430, marginTop: 4 },
-  arcs: { position: "absolute", left: 0, right: 0, top: 70, height: 220 },
-  arcLabel: { position: "absolute", fontFamily: mono, fontSize: 11, letterSpacing: 1 },
+  arcs: { position: "absolute", left: 0, right: 0, top: 0, height: 150, zIndex: 0 },
+  arcsNarrow: { height: 280 },
+  arcLabel: { position: "absolute", fontFamily: mono, fontSize: 11, letterSpacing: 1.4 },
+  moonLabel: { left: "24%", top: 58, color: "#9ED0FF" },
+  marsLabel: { left: 0, right: 0, top: 4, textAlign: "center", color: "#FFC59E" },
+  moonLabelNarrow: { left: "28%", top: 28, color: "#9ED0FF" },
+  marsLabelNarrow: { left: "8%", top: 118, color: "#FFC59E" },
   hint: { textAlign: "center", color: colors.dim, fontFamily: mono, fontSize: 12, letterSpacing: 1.4, marginTop: 8 },
   footer: {
     marginTop: 22,

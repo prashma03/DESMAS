@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import type { EarthDelay } from "../findings";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -22,6 +23,7 @@ import {
   Split,
   StatRow,
   stormLabel,
+  systemLine,
 } from "./dashboard";
 
 const SYSTEMS = [
@@ -36,24 +38,26 @@ export function MarsPage({
   history,
   events,
   source,
-  marsDelay,
+  delay,
 }: {
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
   source: KitSource;
-  marsDelay: string;
+  delay: EarthDelay | null;
 }) {
   const { narrow, width } = useScreen();
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("mars", reading.dark);
   const storm = stormLabel(reading.dark);
+  const oneWay = delay ? `${delay.oneWayMin.toFixed(1)} min` : "3 to 22 min";
+  const linkLine = delay ? `Earth · ${delay.oneWayMin.toFixed(1)} min one way today` : "Earth · up to 22 min one way";
   const thick = reading.dark >= 30;
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
   const planet = narrow ? Math.min(150, Math.round(width * 0.36)) : 300;
   const tags = [
-    { title: "Comms tower", line: on(1) ? "ON · link to relay ship" : "OFF", color: colors.ledBlue, on: on(1), style: { left: "36%" as const, top: "16%" as const } },
+    { title: "Comms tower", line: systemLine(reading.leds[1], "ON · link to relay ship", "OFF"), color: colors.ledBlue, on: on(1), style: { left: "36%" as const, top: "16%" as const } },
     { title: "Science lab", line: on(2) ? "ON" : "OFF", color: colors.ledYellow, on: on(2), style: { left: "16%" as const, top: "40%" as const } },
     { title: "Hab · life support", line: on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF", color: colors.green, on: on(0), style: { left: "42%" as const, top: "34%" as const } },
     { title: "Comfort dome", line: on(3) ? "ON" : "OFF", color: colors.ledRed, on: on(3), style: { right: "30%" as const, top: "46%" as const } },
@@ -62,7 +66,7 @@ export function MarsPage({
 
   return (
     <Page>
-      <View style={[styles.orbit, narrow ? { height: 300 } : null]}>
+      <View nativeID="surface" style={[styles.orbit, narrow ? { height: 300 } : null]}>
         <View style={[styles.planet, { width: planet, height: planet, borderRadius: planet / 2 }, narrow ? { left: 16, top: 44 } : null]}>
           <PlanetFill kind="mars" />
         </View>
@@ -73,7 +77,7 @@ export function MarsPage({
             <GlassTag title="Relay ship" line="Fixes its own faults" color="#FFC59E" style={{ right: "16%", top: "28%" }} />
             <GlassTag title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} style={{ left: "22%", top: "58%" }} />
             <View style={styles.delayPill}>
-              <Text style={styles.delayTxt}>Earth · up to 22 min one way</Text>
+              <Text style={styles.delayTxt}>{linkLine}</Text>
             </View>
             <View style={styles.stormCard}>
               <Text style={styles.kicker}>Dust storm · from the light sensor</Text>
@@ -90,7 +94,7 @@ export function MarsPage({
           <Legend>
             <GlassTag inline title="Relay ship" line="Fixes its own faults" color="#FFC59E" />
             <GlassTag inline title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} />
-            <GlassTag inline title="Earth link" line="Up to 22 min one way" color="#FFC59E" />
+            <GlassTag inline title="Earth link" line={linkLine.replace("Earth · ", "")} color="#FFC59E" />
           </Legend>
           <View style={styles.stormInline}>
             <Text style={styles.kicker}>Dust storm · from the light sensor</Text>
@@ -117,7 +121,8 @@ export function MarsPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults."
+            muted={reading.muted}
+            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults. Send c to recalibrate, m to mute the buzzer."
           />
         )}
       </View>
@@ -134,7 +139,8 @@ export function MarsPage({
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
-            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults."
+            muted={reading.muted}
+            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults. Send c to recalibrate, m to mute the buzzer."
           />
         </>
       ) : null}
@@ -145,31 +151,49 @@ export function MarsPage({
           { label: "Dust storm", badge: "A0", value: storm, note: `${Math.round(reading.dark)}% strength`, series: history.map((h) => h.dark), color: "#FFB07A" },
           { label: "Humidity · hab", badge: "DHT11", value: `${Math.round(reading.hum)}%`, valueColor: reading.alarm ? colors.alert : colors.ink, note: `Cutoff ${Math.round(reading.cut)}%`, series: history.map((h) => h.hum), color: colors.ledBlue },
           { label: "Systems on", badge: "LEDs", value: `${onCount} of 4`, note: "Lowest priority goes off first", series: history.map((h) => h.leds.filter((v) => v > 0).length), color: colors.green },
-          { label: "Earth link", value: marsDelay, note: "One way, depends on orbits", color: colors.ink },
+          { label: "Earth link", value: oneWay, note: delay ? `Round trip ${delay.roundTripMin.toFixed(1)} min${delay.au ? ` · ${delay.au.toFixed(3)} AU` : ""}` : "One way, depends on orbits", color: colors.ink },
           { label: "Relay ship", value: "Healthy", valueColor: colors.ok, note: "2 faults handled onboard", color: colors.ok },
         ]}
       />
 
-      <Lower nav={<SideNav label="On Mars" items={["Base power", "Surface base", "Earth delay", "Fault log", "AI monitor"]} />}>
-        <PowerBlock
-          eyebrow="Base power · rules learned on the Moon"
-          title="A dust storm is a long lunar night"
-          systems={SYSTEMS}
-          leds={reading.leds}
-          solar={solar}
-          battery={battery}
-        />
+      <Lower
+        nav={
+          <SideNav
+            label="On Mars"
+            items={[
+              { id: "power", label: "Base power" },
+              { id: "surface", label: "Surface base" },
+              { id: "delay", label: "Earth delay" },
+              { id: "faults", label: "Fault log" },
+              { id: "monitor", label: "AI monitor" },
+            ]}
+          />
+        }
+      >
+        <View nativeID="power">
+          <PowerBlock
+            eyebrow="Base power · rules learned on the Moon"
+            title="A dust storm is a long lunar night"
+            systems={SYSTEMS}
+            leds={reading.leds}
+            solar={solar}
+            battery={battery}
+          />
+        </View>
         <Split>
-          <DelayCard delay={marsDelay} />
-          <FaultLog events={events} />
+          <DelayCard now={Date.now()} oneWayMin={delay?.oneWayMin} roundTripMin={delay?.roundTripMin} au={delay?.au} />
+          <View nativeID="faults" style={styles.slot}>
+            <FaultLog events={events} />
+          </View>
         </Split>
-        <AiMonitor world="mars" reading={reading} source={source} />
+        <AiMonitor world="mars" reading={reading} source={source} delay={delay ?? undefined} />
       </Lower>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
+  slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
   orbit: { height: 420, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#05060a" },
   planet: { position: "absolute", left: 36, top: 36, width: 300, height: 300, borderRadius: 150, overflow: "hidden" },
   ship: { position: "absolute", right: "22%", top: "24%", width: 16, height: 10, borderRadius: 5, backgroundColor: "#f4f1ea" },

@@ -40,11 +40,12 @@ function at(loopMs: number): { dark: number; hum: number; temp: number } {
   };
 }
 
-function ledsFromDark(dark: number, ms: number): LedState {
+function ledsFromDark(dark: number): LedState {
   const p1 = 1;
   const p4 = dark >= 30 ? 0 : 1;
   const p3 = dark >= 55 ? 0 : 1;
-  const p2 = dark >= 85 ? (Math.floor(ms / 500) % 2 === 0 ? 1 : 0) : 1;
+  // Firmware value 2: comms stays linked, and the blue LED blinks.
+  const p2 = dark >= 85 ? 2 : 1;
   return [p1, p2, p3, p4];
 }
 
@@ -67,7 +68,7 @@ export function readingAt(wallMs: number): KitReading {
     alarm,
     muted: 0,
     dht: 1,
-    leds: ledsFromDark(dark, wallMs),
+    leds: ledsFromDark(dark),
   };
 }
 
@@ -100,6 +101,12 @@ export function eventsFromTransition(
   const p3Was = prev.leds[2];
   const p3Is = next.leds[2];
 
+  if (prev.leds[1] !== 2 && next.leds[1] === 2) {
+    push("POWER", "Almost no light. Comms on low power.");
+  }
+  if (prev.leds[1] === 2 && next.leds[1] === 1) {
+    push("POWER", "Comms back to full power.");
+  }
   if (p4Was === 1 && p4Is === 0) {
     push("POWER", `Light falling (${next.dark}% dark). Turned off Comfort.`);
   }

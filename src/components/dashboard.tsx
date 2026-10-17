@@ -1,20 +1,14 @@
-import { ReactNode } from "react";
-import { Image, Platform, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { ReactNode, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
 import Svg, { Line, Polyline } from "react-native-svg";
 import type { KitEvent, KitReading } from "../kit/types";
 import { useScreen } from "../layout";
+import { board } from "../serial/board";
 import { colors } from "../theme";
+import { PlanetSphere } from "./PlanetSphere";
 
 export const mono = Platform.OS === "web" ? "Geist Mono, ui-monospace, monospace" : undefined;
 export const sans = Platform.OS === "web" ? "Geist, sans-serif" : undefined;
-
-const TEX = {
-  earth: require("../../assets/planets/earth.jpg"),
-  moon: require("../../assets/planets/moon.jpg"),
-  mars: require("../../assets/planets/mars.jpg"),
-} as const;
-const SHADE = require("../../assets/planets/shade.webp");
-const CLOUDS = require("../../assets/planets/clouds.webp");
 
 export type WorldKey = "earth" | "moon" | "mars";
 
@@ -27,6 +21,11 @@ export function batteryEstimate(world: WorldKey, dark: number) {
   const solar = Math.max(0, 100 - dark);
   const raw = world === "earth" ? 28 + solar * 0.1 : world === "moon" ? 40 + solar * 0.31 : 36 + solar * 0.25;
   return Math.round(Math.min(99, Math.max(8, raw)));
+}
+
+export function systemLine(led: number, on: string, off: string) {
+  if (led === 2) return "LOW POWER";
+  return led > 0 ? on : off;
 }
 
 export function stormLabel(dark: number) {
@@ -46,6 +45,8 @@ export function feedMessage(world: WorldKey, message: string) {
   if (world === "moon") return message;
   if (world === "earth") {
     return message
+      .replace("Almost no light. Comms on low power.", "Very dark. Radio on low power to save the battery.")
+      .replace("Comms back to full power.", "Radio back to full power.")
       .replace("Turned off Comfort.", "Turned off the fan.")
       .replace("Lunar night. Turned off Science too.", "Night. Exam room lights off unless needed.")
       .replace("Light rising. Science is back on.", "Brighter. Lights are back on.")
@@ -54,6 +55,7 @@ export function feedMessage(world: WorldKey, message: string) {
       .replace("Humidity is back under the cutoff.", "Store room humidity is back under the cutoff.");
   }
   return message
+    .replace("Almost no light. Comms on low power.", "Severe storm. Comms on low power.")
     .replace("Turned off Comfort.", "Turned off comfort extras.")
     .replace("Lunar night. Turned off Science too.", "Storm thickened. Turned off Science.")
     .replace("Light rising. Science is back on.", "Storm easing. Science is back on.")
@@ -77,17 +79,7 @@ export function Page({ children }: { children: ReactNode }) {
 }
 
 export function PlanetFill({ kind }: { kind: WorldKey }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Image source={TEX[kind]} style={styles.planetPhoto} resizeMode="cover" />
-      {kind === "earth" ? <Image source={CLOUDS} style={styles.clouds} resizeMode="cover" /> : null}
-      <Image
-        source={SHADE}
-        style={[styles.shade, Platform.OS === "web" ? ({ mixBlendMode: "multiply" } as object) : null]}
-        resizeMode="stretch"
-      />
-    </View>
-  );
+  return <PlanetSphere kind={kind} />;
 }
 
 export function GlassTag({
@@ -143,6 +135,7 @@ export function KitReadout({
   temp,
   note,
   inline,
+  muted,
 }: {
   live: boolean;
   dark: number;
@@ -150,6 +143,7 @@ export function KitReadout({
   temp: number;
   note: string;
   inline?: boolean;
+  muted?: 0 | 1;
 }) {
   return (
     <View style={inline ? styles.kitInline : styles.kitCard}>
@@ -163,6 +157,16 @@ export function KitReadout({
         <KitNum label="Temp" value={`${temp.toFixed(1)} °C`} />
       </View>
       <Text style={styles.note}>{note}</Text>
+      {live ? (
+        <View style={styles.cmdRow}>
+          <Pressable style={styles.cmd} onPress={() => void board.send("c")}>
+            <Text style={styles.cmdTxt}>Recalibrate</Text>
+          </Pressable>
+          <Pressable style={styles.cmd} onPress={() => void board.send("m")}>
+            <Text style={styles.cmdTxt}>{muted ? "Unmute buzzer" : "Mute buzzer"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -239,17 +243,27 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
   );
 }
 
-export function SideNav({ label, items }: { label: string; items: string[] }) {
+export function SideNav({ label, items }: { label: string; items: { id: string; label: string }[] }) {
   const { narrow } = useScreen();
+  const [active, setActive] = useState(items[0]?.id ?? "");
+  const jump = (id: string) => {
+    setActive(id);
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
   return (
     <View style={[styles.nav, narrow ? styles.navNarrow : null]}>
       <Text style={styles.kicker}>{label}</Text>
       <View style={narrow ? styles.navChips : styles.navList}>
-        {items.map((item, i) => (
-          <View key={item} style={[styles.navItem, i === 0 ? styles.navOn : null]}>
-            <Text style={[styles.navTxt, i === 0 ? styles.navTxtOn : null]}>{item}</Text>
-          </View>
-        ))}
+        {items.map((item) => {
+          const on = item.id === active;
+          return (
+            <Pressable key={item.id} onPressIn={() => jump(item.id)} style={[styles.navItem, on ? styles.navOn : null]}>
+              <Text style={[styles.navTxt, on ? styles.navTxtOn : null]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -302,18 +316,21 @@ export function PowerBlock({
       </View>
       <View style={styles.cardRow}>
         {systems.map((sys, i) => {
+          const low = leds[i] === 2;
           const onLed = leds[i] > 0;
+          const state = low ? "LOW POWER" : onLed ? "ON" : "OFF";
+          const stateColor = low ? colors.gold : onLed ? colors.ok : colors.dim;
           return (
             <View key={sys.name} style={[styles.sys, narrow ? { flexBasis: "47%" } : null, onLed ? null : { opacity: 0.55 }]}>
               <View style={styles.sysTop}>
                 <Text style={[styles.kicker, { color: LEDS[i] }]}>{`P${i + 1}`}</Text>
-                <View style={[styles.toggle, { backgroundColor: onLed ? colors.green : "#2a2d33" }]}>
+                <View style={[styles.toggle, { backgroundColor: onLed ? (low ? colors.gold : colors.green) : "#2a2d33" }]}>
                   <View style={[styles.knob, { alignSelf: onLed ? "flex-end" : "flex-start" }]} />
                 </View>
               </View>
               <Text style={styles.sysName}>{sys.name}</Text>
               <Text style={styles.note}>{sys.detail}</Text>
-              <Text style={[styles.state, { color: onLed ? colors.ok : colors.dim }]}>{onLed ? "ON" : "OFF"}</Text>
+              <Text style={[styles.state, { color: stateColor }]}>{state}</Text>
             </View>
           );
         })}
@@ -385,18 +402,18 @@ export function HumidityChart({ history, reading }: { history: KitReading[]; rea
   );
 }
 
-export function SerialLog({ history }: { history: KitReading[] }) {
-  const lines = history.slice(-6).map((row) => JSON.stringify(row));
+export function SerialLog({ lines, live }: { lines: string[]; live: boolean }) {
+  const shown = lines.slice(-6);
   return (
-    <View style={styles.panel}>
+    <View nativeID="serial" style={styles.panel}>
       <View style={styles.powerHead}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.kicker}>Raw serial · USB · 9600 baud</Text>
           <Text style={styles.panelTitle}>What the Arduino sends</Text>
         </View>
-        <Text style={[styles.kicker, { flexShrink: 1 }]}>2 lines a second · simulated</Text>
+        <Text style={[styles.kicker, { flexShrink: 1 }]}>{live ? "2 lines a second · live" : "2 lines a second · simulated"}</Text>
       </View>
-      <Text style={styles.serial}>{lines.join("\n\n") || "Waiting for lines…"}</Text>
+      <Text style={styles.serial}>{shown.length ? `${shown.join("\n\n")}\n▍` : "Waiting for lines…"}</Text>
     </View>
   );
 }
@@ -418,7 +435,9 @@ export function LedMap({ leds }: { leds: number[] }) {
           <View key={row[0]} style={styles.ledCard}>
             <View style={styles.ledCardHead}>
               <Text style={[styles.ledName, { color: LEDS[i] }]}>{row[0]}</Text>
-              <Text style={[styles.ledState, { color: leds[i] > 0 ? colors.ok : colors.dim }]}>{leds[i] > 0 ? "ON" : "OFF"}</Text>
+              <Text style={[styles.ledState, { color: leds[i] === 2 ? colors.gold : leds[i] > 0 ? colors.ok : colors.dim }]}>
+              {leds[i] === 2 ? "LOW POWER" : leds[i] > 0 ? "ON" : "OFF"}
+            </Text>
             </View>
             <Text style={styles.note}>{`Moon base · ${row[1]}`}</Text>
             <Text style={styles.note}>{`Clinic · ${row[2]}`}</Text>
@@ -442,23 +461,52 @@ export function LedMap({ leds }: { leds: number[] }) {
           <Text style={[styles.mapCell, { color: LEDS[i] }]}>{row[0]}</Text>
           <Text style={styles.mapCell}>{row[1]}</Text>
           <Text style={styles.mapCell}>{row[2]}</Text>
-          <Text style={[styles.mapCell, { color: leds[i] > 0 ? colors.ok : colors.dim }]}>{leds[i] > 0 ? "ON" : "OFF"}</Text>
+          <Text style={[styles.mapCell, { color: leds[i] === 2 ? colors.gold : leds[i] > 0 ? colors.ok : colors.dim }]}>
+            {leds[i] === 2 ? "LOW POWER" : leds[i] > 0 ? "ON" : "OFF"}
+          </Text>
         </View>
       ))}
     </View>
   );
 }
 
-export function DelayCard({ delay }: { delay: string }) {
+function mmss(totalMinutes: number) {
+  const m = Math.floor(totalMinutes);
+  const s = Math.floor((totalMinutes - m) * 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+export function DelayCard({
+  now,
+  oneWayMin,
+  roundTripMin,
+  au,
+}: {
+  now: number;
+  oneWayMin?: number;
+  roundTripMin?: number;
+  au?: number;
+}) {
+  const target = roundTripMin ?? 44;
+  const speed = 240;
+  const periodMs = (target * 60_000) / speed;
+  const waited = ((now % periodMs) * speed) / 60_000;
+  const fraction = Math.max(0, Math.min(1, waited / target));
+  const today = oneWayMin
+    ? `Today ${oneWayMin.toFixed(1)} min one way · ${target.toFixed(1)} min round trip${au ? ` · ${au.toFixed(3)} AU` : ""}`
+    : "One way is 3 to 22 min until today's range arrives";
   return (
-    <View style={[styles.panel, styles.panelFlex]}>
+    <View nativeID="delay" style={[styles.panel, styles.panelFlex]}>
       <Text style={styles.kicker}>Why it runs onboard</Text>
       <View style={styles.powerHead}>
         <Text style={styles.panelTitle}>Wait for Earth, or decide here?</Text>
       </View>
       <Text style={styles.note}>Ask Mission Control</Text>
-      <Text style={styles.big}>{delay}</Text>
-      <Text style={styles.note}>Still waiting · worst case 44 min round trip</Text>
+      <Text style={styles.big}>{mmss(waited)}</Text>
+      <View style={styles.track}>
+        <View style={[styles.trackWait, { width: `${Math.round(fraction * 1000) / 10}%` }]} />
+      </View>
+      <Text style={styles.note}>{`Still waiting · ${today} · worst case 44:00 · sped up ${speed}×`}</Text>
       <View style={styles.doneRow}>
         <Text style={styles.body}>DESMAS on the base</Text>
         <Text style={[styles.body, { color: "#FFB07A" }]}>Done</Text>
@@ -466,7 +514,7 @@ export function DelayCard({ delay }: { delay: string }) {
       <View style={styles.track}>
         <View style={styles.trackFill} />
       </View>
-      <Text style={styles.note}>Acted on the last reading. The base follows the Moon power rules.</Text>
+      <Text style={styles.note}>Acted on the last reading · 0.5 s ago. The base follows the Moon power rules.</Text>
     </View>
   );
 }
@@ -546,9 +594,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 },
   page: { padding: 18, paddingBottom: 48, gap: 14, width: "100%", maxWidth: 1240, alignSelf: "center" },
   pageCompact: { paddingHorizontal: 12, paddingTop: 12, gap: 12 },
-  planetPhoto: { width: "100%", height: "100%" },
-  clouds: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.35 },
-  shade: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.85 },
   tag: { position: "absolute", ...tagShell },
   tagInline: { alignSelf: "flex-start", flexShrink: 1, ...tagShell },
   tagTitle: { color: colors.ink, fontSize: 13, fontFamily: sans },
@@ -700,8 +745,12 @@ const styles = StyleSheet.create({
   ledState: { fontFamily: mono, fontSize: 12, letterSpacing: 0.6 },
   body: { color: colors.ink, fontSize: 15, fontFamily: sans },
   doneRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
-  track: { height: 6, borderRadius: 99, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },
+  track: { height: 8, borderRadius: 99, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },
+  trackWait: { height: "100%", backgroundColor: colors.ledBlue, borderRadius: 99 },
   trackFill: { width: "100%", height: "100%", backgroundColor: "#FFB07A" },
+  cmdRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  cmd: { borderRadius: 999, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10, paddingVertical: 6 },
+  cmdTxt: { color: colors.ink, fontFamily: sans, fontSize: 12 },
   split: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%" },
   lower: { flexDirection: "row", flexWrap: "wrap", gap: 16, alignItems: "flex-start" },

@@ -6,8 +6,9 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "outDir": "dist",
-    "rootDir": "src"
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "rootDir": ".."
   },
-  "include": ["src"]
+  "include": ["src", "../src/findings.ts", "../src/kit/types.ts"]
 }
