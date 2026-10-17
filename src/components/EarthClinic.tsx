@@ -10,7 +10,7 @@ import { batteryEstimate, clock, feedMessage, Lower, mono, sans, solarOf, Sparkl
 
 const LED = ["#4ADE80", "#60A5FA", "#FACC15", "#F87171"] as const;
 const STAGE = ["ALL FOUR ON", "FAN OFF", "FAN AND LIGHTS OFF", "RADIO ON LOW POWER"] as const;
-const FLOW_H = 78;
+const FLOW_H = 84;
 
 const SYSTEMS = [
   { name: "Vaccine fridge", detail: "Green LED · pin 8 · never shed" },
@@ -192,7 +192,7 @@ function ClinicRail() {
       const scrolls = (style.overflowY === "auto" || style.overflowY === "scroll") && node.scrollHeight > node.clientHeight + 8;
       if (scrolls) {
         const top = target.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop - 8;
-        node.scrollTo({ top, behavior: "smooth" });
+        node.scrollTop = top;
         return;
       }
       node = node.parentElement;
@@ -210,13 +210,15 @@ function ClinicRail() {
             <Pressable
               key={item.id}
               accessibilityRole="button"
-              onPressIn={() => jump(item.id)}
+              onPress={() => jump(item.id)}
               style={[styles.railItem, on ? styles.railOn : null]}
             >
-              <Svg width={16} height={16} viewBox="0 0 16 16">
-                <Path d={item.d} stroke={color} strokeWidth={1.4} fill="none" strokeLinejoin="round" strokeLinecap="round" />
-              </Svg>
-              <Text style={[styles.railTxt, { color }]}>{item.label}</Text>
+              <View pointerEvents="none" style={styles.railHit}>
+                <Svg width={16} height={16} viewBox="0 0 16 16">
+                  <Path d={item.d} stroke={color} strokeWidth={1.4} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+                </Svg>
+                <Text style={[styles.railTxt, { color }]}>{item.label}</Text>
+              </View>
             </Pressable>
           );
         })}
@@ -394,14 +396,14 @@ function FlowLines({ width, centers, leds }: { width: number; centers: number[];
   return (
     <Svg width="100%" height={FLOW_H} viewBox={`0 0 ${width} ${FLOW_H}`} preserveAspectRatio="none">
       {centers.map((cx, i) => {
-        const d = `M ${mid} 28 C ${mid} 58 ${cx} 46 ${cx} ${FLOW_H}`;
+        const d = `M ${mid} 22 C ${cx} 34 ${cx} 48 ${cx} ${FLOW_H}`;
         const led = leds[i] ?? 0;
         const live = led > 0;
         const moving = live && !reduce;
         const color = live ? LED[i] : "rgba(255,255,255,0.22)";
         return (
           <G key={LED[i]}>
-            <Path d={d} stroke={color} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={live ? 0.4 : 1} />
+            <Path d={d} stroke={color} strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={live ? 0.9 : 1} />
             {moving ? (
               <Path
                 d={d}
@@ -515,9 +517,9 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.ok },
   liveTxt: { color: colors.ok, fontFamily: mono, fontSize: 10, letterSpacing: 0.6 },
-  statVal: { fontFamily: mono, fontSize: 26, fontWeight: "400", letterSpacing: -0.4 },
+  statVal: { fontFamily: mono, fontSize: 26, fontWeight: "400", letterSpacing: -0.4, lineHeight: 30 },
   chartSlot: { height: 32, justifyContent: "center" },
-  note: { color: colors.muted, fontFamily: sans, fontSize: 13, lineHeight: 17, minHeight: 34 },
+  note: { color: colors.muted, fontFamily: sans, fontSize: 12, lineHeight: 16, minHeight: 32 },
   meterTrack: { height: 4, borderRadius: 99, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" },
   meterFill: { height: "100%", borderRadius: 99 },
   rail: { width: 188, flexShrink: 0, gap: 2, paddingTop: 2 },
@@ -525,7 +527,8 @@ const styles = StyleSheet.create({
   railLabel: { paddingHorizontal: 12, paddingBottom: 8 },
   railList: { gap: 2 },
   railRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  railItem: { minHeight: 40, borderRadius: 10, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  railItem: { minHeight: 44, borderRadius: 10, paddingHorizontal: 12, justifyContent: "center" },
+  railHit: { flexDirection: "row", alignItems: "center", gap: 10 },
   railOn: { backgroundColor: "rgba(92,200,255,0.1)" },
   railTxt: { fontFamily: sans, fontSize: 15, fontWeight: "500" },
   power: { gap: 14 },
@@ -533,12 +536,12 @@ const styles = StyleSheet.create({
   powerCopy: { flexGrow: 1, flexShrink: 1, minWidth: 220, gap: 6 },
   eyebrow: { color: colors.blue, fontFamily: mono, fontSize: 12, letterSpacing: 1.4, textTransform: "uppercase" },
   kicker: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase" },
-  powerTitle: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 32, letterSpacing: -0.5 },
+  powerTitle: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 34, letterSpacing: -0.6 },
   stagePill: { borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", paddingHorizontal: 12, paddingVertical: 7 },
   stageTxt: { color: colors.muted, fontFamily: mono, fontSize: 11, letterSpacing: 0.6 },
   powerBody: { position: "relative" },
   flow: { position: "absolute", left: 0, right: 0, top: 0, height: FLOW_H, zIndex: 0 },
-  cardRowFlow: { marginTop: FLOW_H - 6 },
+  cardRowFlow: { marginTop: FLOW_H },
   source: {
     position: "absolute",
     top: 0,
@@ -574,8 +577,8 @@ const styles = StyleSheet.create({
   track: { width: 36, height: 20, borderRadius: 10, padding: 2, justifyContent: "center" },
   knob: { width: 16, height: 16, borderRadius: 8 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  ledDot: { width: 8, height: 8, borderRadius: 4 },
-  sysName: { color: colors.ink, fontFamily: sans, fontSize: 16, fontWeight: "500" },
+  ledDot: { width: 9, height: 9, borderRadius: 5 },
+  sysName: { color: colors.ink, fontFamily: sans, fontSize: 17, fontWeight: "500" },
   detail: { color: colors.muted, fontFamily: sans, fontSize: 13, lineHeight: 18 },
   state: { fontFamily: mono, fontSize: 11, letterSpacing: 0.6, marginTop: 2 },
   panels: { flexDirection: "row", flexWrap: "wrap", gap: 14, alignItems: "stretch" },
@@ -586,7 +589,7 @@ const styles = StyleSheet.create({
   tableHead: { flexDirection: "row", gap: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.1)" },
   tableRow: { flexDirection: "row", gap: 8, alignItems: "center", paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" },
   col: { flex: 1, minWidth: 0 },
-  colHead: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1 },
+  colHead: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
   ledCol: { flexDirection: "row", alignItems: "center", gap: 8 },
   tableDot: { width: 8, height: 8, borderRadius: 4 },
   ledName: { color: colors.muted, fontFamily: mono, fontSize: 12, flexShrink: 1 },
