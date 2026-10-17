@@ -7,6 +7,11 @@ import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { useDiagnosis } from "../useDiagnosis";
 import { speakAlert, stopVoice, voiceSupported } from "../voice";
+import { speakAlert as speakGrokTts } from "../speakAlert";
+import { communicationAutonomy } from "../kit/autonomy";
+import { IncidentPanel } from "./IncidentPanel";
+import { ModelValidation } from "./ModelValidation";
+import { VoiceTalk } from "./VoiceTalk";
 import { mono, sans } from "./dashboard";
 
 const TONE: Record<string, string> = {
@@ -56,7 +61,16 @@ export function AiMonitor({
   const line = `${info.title}. ${info.body}`;
   const lineRef = useRef(line);
   lineRef.current = line;
-  const speak = () => speakAlert(line, setVoice);
+  const speak = () => {
+    void speakGrokTts(line)
+      .then((source) => {
+        setVoice({
+          text: source === "grok" ? "Playing Grok TTS" : "Browser voice (API unavailable)",
+          error: false,
+        });
+      })
+      .catch(() => speakAlert(line, setVoice));
+  };
   const stop = () => {
     stopVoice();
     setVoice({ text: "Voice stopped.", error: false });
@@ -118,6 +132,11 @@ export function AiMonitor({
       setPending(false);
     }
   };
+  const autonomy = communicationAutonomy({
+    world,
+    reading,
+    mars: world === "mars" ? delay ?? null : null,
+  });
   const { narrow } = useScreen();
   const tone = level === "ALERT" ? colors.alert : level === "WATCH" ? colors.watch : colors.ok;
   const rate =
@@ -143,6 +162,13 @@ export function AiMonitor({
         <Text style={[styles.title, narrow ? { fontSize: 20 } : null]}>{info.title}</Text>
       </View>
       <Text style={styles.body}>{info.body}</Text>
+      <View style={styles.autonomy}>
+        <Text style={[styles.kicker, { color: autonomy.mode === "local-first" ? colors.gold : colors.ok }]}>
+          {autonomy.mode === "local-first" ? "Local-first" : "Earth-guided"}
+        </Text>
+        <Text style={styles.voiceStatus}>{autonomy.summary}</Text>
+        <Text style={styles.voiceStatus}>{autonomy.recommendation}</Text>
+      </View>
       <View style={styles.voice}>
         <View style={styles.voiceBtns}>
           <Pressable
@@ -162,6 +188,9 @@ export function AiMonitor({
         </View>
         <Text style={[styles.voiceStatus, voice.error ? styles.voiceErr : null]}>{voice.text}</Text>
       </View>
+      <VoiceTalk world={world} />
+      <IncidentPanel world={world} />
+      <ModelValidation />
       <View style={styles.chips}>
         <Text style={styles.kicker}>Based on</Text>
         {info.evidence.map((item) => (
@@ -274,6 +303,14 @@ const styles = StyleSheet.create({
   level: { fontFamily: mono, fontSize: 11, letterSpacing: 0.8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, overflow: "hidden" },
   title: { color: colors.ink, fontFamily: sans, fontWeight: "400", fontSize: 26, letterSpacing: -0.4, flexGrow: 1, flexShrink: 1, flexBasis: 180, minWidth: 0 },
   body: { color: colors.muted, fontSize: 15, lineHeight: 22, fontFamily: sans },
+  autonomy: {
+    gap: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
   voice: { gap: 8 },
   voiceBtns: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   speakBtn: { backgroundColor: colors.blue, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },

@@ -1,0 +1,44 @@
+{
+  "earth": [
+    {
+      "id": "silica",
+      "name": "Silica gel packs",
+      "qty": 12,
+      "location": "Store room shelf"
+    },
+    {
+      "id": "fridge-seal",
+      "name": "Vaccine fridge door seal",
+      "qty": 1,
+      "location": "Clinic spares drawer"
+    }
+  ],
+  "moon": [
+    {
+      "id": "fan-module",
+      "name": "Spare dehumidifier fan module",
+      "qty": 2,
+      "location": "Storage B"
+    },
+    {
+      "id": "hab-filter",
+      "name": "Hab A air filter",
+      "qty": 4,
+      "location": "Life support rack"
+    }
+  ],
+  "mars": [
+    {
+      "id": "battery-heater",
+      "name": "Spare battery heater",
+      "qty": 1,
+      "location": "Relay ship locker"
+    },
+    {
+      "id": "radio-b",
+      "name": "Radio B spare transceiver",
+      "qty": 1,
+      "location": "Relay ship comms bay"
+    }
+  ]
+}

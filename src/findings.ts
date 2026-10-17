@@ -1,3 +1,4 @@
+import { communicationAutonomy } from "./kit/autonomy";
 import type { KitReading, WorldId } from "./kit/types";
 
 export type WorldKey = Exclude<WorldId, "all">;
@@ -230,7 +231,10 @@ export function suggestedQuestions(world: WorldKey, r: KitReading, delay?: Earth
       },
       {
         q: "Do we need to call Earth about this?",
-        a: "No. Anything the crew needs to do uses parts already on the base. A reply from Earth takes about 2.6 seconds, but from Mars it can take up to 44 minutes.",
+        a: (() => {
+          const status = communicationAutonomy({ world: "moon", reading: r });
+          return `${status.summary} ${status.recommendation}`;
+        })(),
       },
       { q: "Which readings are you watching?", a: "Light level on A0, humidity and temperature from the DHT11 in Hab A, and which of the four systems the board left on." },
     ];
@@ -238,9 +242,10 @@ export function suggestedQuestions(world: WorldKey, r: KitReading, delay?: Earth
   return [
     {
       q: "Should we wait for Earth before acting?",
-      a: delay
-        ? `No. Today a reply takes about ${Math.round(delay.roundTripMin)} minutes there and back, and up to 44 at worst. These power rules were tested on the Moon, so the base follows them on its own.`
-        : "No. A reply could take up to 44 minutes. These power rules were tested during lunar nights on the Moon, so the base can follow them on its own.",
+      a: (() => {
+        const status = communicationAutonomy({ world: "mars", reading: r, mars: delay ?? null });
+        return `${status.summary} ${status.recommendation} The power rules were tested on the Moon, and the Arduino already applies them.`;
+      })(),
     },
     {
       q: "What did the relay ship fix on its own?",

@@ -488,11 +488,15 @@ export function DelayCard({
   oneWayMin,
   roundTripMin,
   au,
+  mode,
+  summary,
 }: {
   now: number;
   oneWayMin?: number;
   roundTripMin?: number;
   au?: number;
+  mode?: "local-first" | "earth-guided";
+  summary?: string;
 }) {
   const target = roundTripMin ?? 44;
   const speed = 240;
@@ -504,16 +508,18 @@ export function DelayCard({
     : "One way is 3 to 22 min until today's range arrives";
   return (
     <View nativeID="delay" style={[styles.panel, styles.panelFlex]}>
-      <Text style={styles.kicker}>Why it runs onboard</Text>
+      <Text style={[styles.kicker, { color: mode === "earth-guided" ? colors.ok : colors.gold }]}>
+        {mode === "earth-guided" ? "Earth-guided" : "Local-first"}
+      </Text>
       <View style={styles.powerHead}>
         <Text style={styles.panelTitle}>Wait for Earth, or decide here?</Text>
       </View>
-      <Text style={styles.note}>Ask Mission Control</Text>
+      <Text style={styles.note}>{summary ?? "The round trip, not the one-way time, is how long Earth needs to answer."}</Text>
       <Text style={styles.big}>{mmss(waited)}</Text>
       <View style={styles.track}>
         <View style={[styles.trackWait, { width: `${Math.round(fraction * 1000) / 10}%` }]} />
       </View>
-      <Text style={styles.note}>{`Still waiting · ${today} · worst case 44:00 · sped up ${speed}×`}</Text>
+      <Text style={styles.note}>{`${today} · one way and round trip are separate · sped up ${speed}×`}</Text>
       <View style={styles.doneRow}>
         <Text style={styles.body}>DESMAS on the base</Text>
         <Text style={[styles.body, { color: "#FFB07A" }]}>Done</Text>
