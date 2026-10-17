@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, Image, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Platform, StyleSheet, Text, View, type ImageStyle } from "react-native";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -22,6 +22,25 @@ import {
   Split,
   StatRow,
 } from "./dashboard";
+
+const DAY = require("../../assets/moon/artemis-day.jpg");
+const NIGHT = require("../../assets/moon/artemis-night.jpg");
+
+/** Daylight through the first cover, then the night plate is fully in by lunar night. */
+function nightOpacity(dark: number) {
+  return Math.max(0, Math.min(1, (dark - 24) / (58 - 24)));
+}
+
+function powerWord(led: number) {
+  if (led === 2) return "LOW POWER";
+  return led > 0 ? "ON" : "OFF";
+}
+
+function solarWord(dark: number) {
+  if (dark >= 55) return "LOW";
+  if (dark >= 30) return "DIM";
+  return "CHARGING";
+}
 
 const SYSTEMS = [
   { name: "Life support", detail: "Hab A · green LED · pin 8" },
@@ -64,21 +83,24 @@ export function MoonPage({
     loop.start();
     return () => loop.stop();
   }, [reading.alarm, pulse]);
-  const comms =
-    reading.leds[1] === 2 ? "Comms — LOW POWER" : on(1) ? "Comms — ON" : "Comms — OFF";
   const tags = [
-    { title: "Communications Tower", line: comms, color: colors.ledBlue, on: on(1), style: { left: "46%" as const, top: "30%" as const } },
-    { title: "Science Lab", line: on(2) ? "Science — ON" : "Science — OFF", color: colors.ledYellow, on: on(2), style: { left: "12%" as const, top: "46%" as const } },
-    { title: "Hab A", line: on(0) ? "Life Support — ON" : "Life Support — OFF", color: colors.green, on: on(0), style: { left: "38%" as const, top: "40%" as const } },
-    { title: "Comfort Module", line: on(3) ? "Comfort — ON" : "Comfort — OFF", color: colors.ledRed, on: on(3), style: { left: "58%" as const, top: "62%" as const } },
-    { title: "Solar Arrays", line: solar >= 15 ? "Charging" : "Idle", color: colors.gold, on: solar >= 15, style: { right: "6%" as const, top: "34%" as const } },
+    { title: "Communications Tower", line: `COMMS: ${powerWord(reading.leds[1])}`, color: reading.leds[1] === 2 ? colors.gold : colors.ledBlue, on: on(1), style: { left: "44%" as const, top: "28%" as const } },
+    { title: "Science Lab", line: `SCIENCE: ${powerWord(reading.leds[2])}`, color: colors.ledYellow, on: on(2), style: { left: "6%" as const, top: "52%" as const } },
+    { title: "Hab A", line: `LIFE SUPPORT: ${powerWord(reading.leds[0])}`, color: colors.green, on: on(0), style: { left: "36%" as const, top: "44%" as const } },
+    { title: "Comfort Module", line: `COMFORT: ${powerWord(reading.leds[3])}`, color: colors.ledRed, on: on(3), style: { left: "54%" as const, top: "68%" as const } },
+    { title: "Solar Arrays", line: `SOLAR INPUT: ${solarWord(reading.dark)}`, color: colors.gold, on: reading.dark < 55, style: { right: "2%" as const, top: "38%" as const } },
   ];
 
   return (
     <Page>
       <View style={styles.scene}>
-        <Image source={require("../../assets/moon/artemis-base.jpg")} style={styles.photo} resizeMode="cover" accessibilityLabel="Artemis lunar research base at the Moon's south pole" />
-        <View pointerEvents="none" style={[styles.veil, { opacity: Math.min(0.78, reading.dark / 128) }]} />
+        <Image source={DAY} style={styles.photo} resizeMode="cover" accessibilityLabel="Artemis base in lunar daylight" />
+        <Image
+          source={NIGHT}
+          style={[styles.photo, styles.nightFade, { opacity: nightOpacity(reading.dark) }]}
+          resizeMode="cover"
+          accessibilityLabel="Artemis base during lunar night"
+        />
         {reading.alarm ? <Animated.View pointerEvents="none" style={[styles.alarm, { opacity: pulse }]} /> : null}
         <DayBadge
           label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${onCount} of 4 on` : "Lunar day · all systems on"}
@@ -175,9 +197,11 @@ export function MoonPage({
 
 const styles = StyleSheet.create({
   slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
-  scene: { width: "100%", aspectRatio: 16 / 9, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#000" },
-  photo: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
-  veil: { ...StyleSheet.absoluteFillObject, backgroundColor: "#020308" },
+  scene: { width: "100%", aspectRatio: 1006 / 492, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#000" },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  nightFade: (Platform.OS === "web"
+    ? { transitionProperty: "opacity", transitionDuration: "800ms", transitionTimingFunction: "ease" }
+    : {}) as ImageStyle,
   alarm: {
     position: "absolute",
     left: "36%",

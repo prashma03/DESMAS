@@ -1,5 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { Image, Platform, StyleSheet, Text, View, type ImageStyle, type ViewStyle } from "react-native";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -7,7 +6,6 @@ import { AiMonitor } from "./AIMonitor";
 import {
   AlertFeed,
   batteryEstimate,
-  DayBadge,
   GlassTag,
   KitReadout,
   LedMap,
@@ -20,8 +18,21 @@ import {
   solarOf,
   Split,
   StatRow,
-  systemLine,
 } from "./dashboard";
+
+const DAY = require("../../assets/earth/clinic-day.jpg");
+const NIGHT = require("../../assets/earth/clinic-night.jpg");
+
+/** Day plate below 25% dark, night plate fully visible by 65% dark. */
+function nightOpacity(dark: number) {
+  return Math.max(0, Math.min(1, (dark - 25) / 40));
+}
+
+function ledLine(led: number, pin: string, always = false) {
+  if (led === 2) return `LOW POWER · ${pin}`;
+  if (led > 0) return always ? `ON · ${pin} · ALWAYS` : `ON · ${pin}`;
+  return "OFF · SAVING POWER";
+}
 
 const SYSTEMS = [
   { name: "Vaccine fridge", detail: "Green LED · pin 8 · never shed" },
@@ -29,6 +40,8 @@ const SYSTEMS = [
   { name: "Lights", detail: "Yellow LED · pin 10 · exam room" },
   { name: "Fan", detail: "Red LED · pin 11 · cooling" },
 ];
+
+const HINT = "Cover the light sensor for sunset. Breathe on the DHT11 to test the store room alarm.";
 
 export function EarthPage({
   reading,
@@ -42,90 +55,69 @@ export function EarthPage({
   source: KitSource;
 }) {
   const { narrow, width } = useScreen();
+  const stacked = narrow || width < 980;
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("earth", reading.dark);
-  const night = reading.dark >= 55;
-  const dusk = !night && reading.dark >= 30;
-  const on = (i: number) => reading.leds[i] > 0;
-  const clinicW = narrow ? Math.round(Math.min(210, Math.max(148, width * 0.46))) : 280;
-  const cell = Math.max(8, Math.min(22, Math.floor((clinicW - 28) / 8)));
+  const dark = Math.round(reading.dark);
+  const night = dark >= 55;
+  const dusk = !night && dark >= 30;
+  const phase = night ? "NIGHT" : dusk ? "DUSK" : "DAY";
+  const phaseColor = night ? colors.blue : colors.gold;
+  const phaseDetail = night
+    ? `Light sensor ${dark}% dark · running on battery`
+    : dusk
+      ? "Sun going down · fan off"
+      : "Daylight · solar charging the battery";
+  const batteryLine = `${dark >= 30 ? "ON BATTERY" : "CHARGING"} · EST. ${battery}%`;
   const tags = [
-    { title: "Vaccine fridge", line: on(0) ? "ON · P1 · always" : "OFF · P1", color: colors.green, on: on(0), style: { left: "30%" as const, top: "28%" as const } },
-    { title: "Fan", line: on(3) ? "ON · P4" : "OFF · P4", color: colors.ledRed, on: on(3), style: { right: "24%" as const, top: "34%" as const } },
-    { title: "Battery", line: `Estimate · ${battery}%`, color: colors.gold, on: true, style: { right: "18%" as const, top: "52%" as const } },
-    { title: "Lights", line: on(2) ? "ON · P3" : "OFF · P3", color: colors.ledYellow, on: on(2), style: { left: "46%" as const, top: "58%" as const } },
-    { title: "Radio", line: systemLine(reading.leds[1], "ON · P2", "OFF · P2"), color: colors.ledBlue, on: on(1), style: { right: "8%" as const, top: "16%" as const } },
+    { title: "Vaccine fridge", line: ledLine(reading.leds[0], "P1", true), color: colors.green, on: reading.leds[0] > 0, x: 30.4, y: 52, side: "above" as const },
+    { title: "Fan", line: ledLine(reading.leds[3], "P4"), color: colors.ledRed, on: reading.leds[3] > 0, x: 61.2, y: 50, side: "above" as const },
+    { title: "Lights", line: ledLine(reading.leds[2], "P3"), color: colors.ledYellow, on: reading.leds[2] > 0, x: 54.3, y: 72, side: "below" as const },
+    { title: "Battery", line: batteryLine, color: colors.gold, on: true, x: 70, y: 64, side: "left" as const },
+    { title: "Radio", line: ledLine(reading.leds[1], "P2"), color: reading.leds[1] === 2 ? colors.gold : colors.ledBlue, on: reading.leds[1] > 0, x: 78, y: 12, side: "left" as const },
   ];
 
   return (
     <Page>
-      <View style={[styles.scene, narrow ? { height: 380 } : null]}>
-        <LinearGradient
-          colors={night ? ["#1a2744", "#24324a", "#3a4634", "#243024"] : ["#8ec8ef", "#d5eef8", "#c5e2a4", "#6f9a4e"]}
-          style={StyleSheet.absoluteFill}
+      <View style={styles.scene}>
+        <Image source={DAY} style={styles.photo} resizeMode="cover" accessibilityLabel="Off-grid clinic in daylight" />
+        <Image
+          source={NIGHT}
+          style={[styles.photo, styles.nightFade, { opacity: nightOpacity(reading.dark) }]}
+          resizeMode="cover"
+          accessibilityLabel="Off-grid clinic at night"
         />
-        <View style={[styles.ground, { backgroundColor: night ? "#1c2818" : "#6d9a48" }]} />
-        <View style={[styles.peak, { left: "8%", borderBottomColor: night ? "#2c3a28" : "#8eae78" }]} />
-        <View style={[styles.peak, { left: "22%", borderBottomColor: night ? "#334232" : "#9bb884", borderLeftWidth: 110, borderRightWidth: 110, borderBottomWidth: 150 }]} />
-        <View style={[styles.peak, { right: "6%", borderBottomColor: night ? "#2a3828" : "#7f9e6c" }]} />
-        <Tree left="6%" />
-        <Tree left="14%" />
-        <Tree left="78%" />
-        <View style={[styles.clinic, narrow ? { left: "50%", width: clinicW, marginLeft: -clinicW / 2, bottom: "34%" } : null]}>
-          <View style={[styles.roof, narrow ? { width: clinicW } : null]}>
-            <View style={styles.panels}>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <View key={i} style={[styles.cell, { width: cell }]} />
-              ))}
-            </View>
-          </View>
-          <View style={[styles.walls, narrow ? { width: clinicW * 0.9, height: 86 } : null]}>
-            <View style={styles.window} />
-            <View style={styles.door} />
-            <View style={styles.window} />
-          </View>
-          <View style={styles.sign}>
-            <Text style={styles.signTxt}>CLINIC</Text>
-          </View>
+        <View style={styles.phase}>
+          <Text style={[styles.phaseBadge, { color: phaseColor, backgroundColor: night ? "rgba(158,208,255,0.16)" : "rgba(242,181,68,0.2)" }]}>{phase}</Text>
+          <Text style={styles.phaseDetail} numberOfLines={2}>
+            {phaseDetail}
+          </Text>
         </View>
-        <View style={[styles.fanBox, narrow ? { bottom: "48%" } : null]} />
-        <View style={[styles.tower, narrow ? { height: 90, bottom: "42%" } : null]} />
-        <View style={[styles.veil, { opacity: Math.min(0.62, reading.dark / 140) }]} />
-        <DayBadge
-          label={night ? "Night · on battery" : dusk ? "Sunset · fan off" : "Daylight · solar charging the battery"}
-          tone={reading.alarm ? "alert" : night || dusk ? "watch" : "ok"}
-        />
-        {narrow
+        {stacked
           ? null
-          : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
-        <SceneTitle kicker="01 · Earth · today" title="Off-grid clinic" />
-        {narrow ? null : (
-          <KitReadout
-            live={source === "serial"}
-            dark={reading.dark}
-            hum={reading.hum}
-            temp={reading.temp}
-            muted={reading.muted}
-            note="Cover the light sensor for sunset. Cover it fully for low-power radio. Breathe on the DHT11 to test the store room alarm."
-          />
+          : tags.map((tag) => (
+              <GlassTag
+                key={tag.title}
+                title={tag.title}
+                line={tag.line}
+                color={tag.color}
+                on={tag.on}
+                style={pinStyle(tag.x, tag.y, tag.side)}
+              />
+            ))}
+        <SceneTitle kicker="01 · Earth · today" title="Off-grid clinic" style={stacked ? styles.titleStacked : styles.title} />
+        {stacked ? null : (
+          <KitReadout live={source === "serial"} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
         )}
       </View>
-      {narrow ? (
+      {stacked ? (
         <>
           <Legend>
             {tags.map((tag) => (
               <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
             ))}
           </Legend>
-          <KitReadout
-            inline
-            live={source === "serial"}
-            dark={reading.dark}
-            hum={reading.hum}
-            temp={reading.temp}
-            muted={reading.muted}
-            note="Cover the light sensor for sunset. Cover it fully for low-power radio. Breathe on the DHT11 to test the store room alarm."
-          />
+          <KitReadout inline live={source === "serial"} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
         </>
       ) : null}
 
@@ -177,43 +169,63 @@ export function EarthPage({
   );
 }
 
-function Tree({ left }: { left: `${number}%` }) {
-  return (
-    <View style={[styles.tree, { left }]}>
-      <View style={styles.canopy} />
-      <View style={styles.trunk} />
-    </View>
-  );
+function pinStyle(x: number, y: number, side: "above" | "below" | "left"): ViewStyle {
+  const shift: ViewStyle["transform"] =
+    side === "above"
+      ? [{ translateX: "-50%" }, { translateY: "-100%" }]
+      : side === "below"
+        ? [{ translateX: "-50%" }]
+        : [{ translateX: "-100%" }, { translateY: "-50%" }];
+  return { left: `${x}%`, top: `${y}%`, zIndex: 3, transform: shift };
 }
 
 const styles = StyleSheet.create({
   slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
-  scene: { height: 460, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
-  ground: { position: "absolute", left: 0, right: 0, bottom: 0, height: "34%" },
-  peak: {
-    position: "absolute",
-    bottom: "28%",
-    width: 0,
-    height: 0,
-    borderLeftWidth: 90,
-    borderRightWidth: 90,
-    borderBottomWidth: 120,
-    borderLeftColor: "transparent",
-    borderRightColor: "transparent",
+  scene: {
+    width: "100%",
+    aspectRatio: 1520 / 880,
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: "#000",
   },
-  tree: { position: "absolute", bottom: "30%", alignItems: "center" },
-  canopy: { width: 46, height: 64, borderRadius: 24, backgroundColor: "#2f6a34" },
-  trunk: { width: 6, height: 18, backgroundColor: "#5a3b24" },
-  clinic: { position: "absolute", left: "28%", bottom: "16%", width: 280, alignItems: "center" },
-  roof: { width: 300, height: 54, backgroundColor: "#8d9298", borderTopLeftRadius: 6, borderTopRightRadius: 6, justifyContent: "center" },
-  panels: { flexDirection: "row", justifyContent: "center", gap: 4 },
-  cell: { height: 28, backgroundColor: "#1d3d66", borderRadius: 2 },
-  walls: { width: 260, height: 110, backgroundColor: "#f3efe6", flexDirection: "row", alignItems: "flex-end", justifyContent: "space-evenly", paddingBottom: 0 },
-  window: { width: 36, height: 32, backgroundColor: "#243044", marginBottom: 28 },
-  door: { width: 34, height: 58, backgroundColor: "#6b4a32" },
-  sign: { position: "absolute", top: 62, backgroundColor: "#1f6b45", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 3 },
-  signTxt: { color: "#fff", fontSize: 10, letterSpacing: 1 },
-  fanBox: { position: "absolute", right: "30%", bottom: "28%", width: 36, height: 28, backgroundColor: "#d9d3c8", borderRadius: 4 },
-  tower: { position: "absolute", right: "12%", bottom: "30%", width: 3, height: 120, backgroundColor: "#c5c8cc" },
-  veil: { ...StyleSheet.absoluteFillObject, backgroundColor: "#05070d" },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  nightFade: (Platform.OS === "web"
+    ? { transitionProperty: "opacity", transitionDuration: "800ms", transitionTimingFunction: "ease" }
+    : {}) as ImageStyle,
+  phase: {
+    position: "absolute",
+    top: 14,
+    left: 14,
+    zIndex: 4,
+    maxWidth: "70%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 12,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(8,10,14,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  phaseBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontFamily: Platform.OS === "web" ? "Geist Mono, ui-monospace, monospace" : undefined,
+    fontSize: 11,
+    letterSpacing: 0.8,
+  },
+  phaseDetail: {
+    flexShrink: 1,
+    color: colors.ink,
+    fontSize: 12,
+    fontFamily: Platform.OS === "web" ? "Geist, sans-serif" : undefined,
+  },
+  title: { maxWidth: "42%", bottom: 16 },
+  titleStacked: { maxWidth: "86%", left: 12, bottom: 12 },
 });
