@@ -33,6 +33,137 @@ const CLEAR = require("../../assets/mars/surface-clear.jpg");
 const STORM = require("../../assets/mars/surface-storm.jpg");
 const ADVICE = "Same four systems and rules as the Moon base. The relay ship above handles its own faults.";
 
+/** Reference frame for the orbit hero. Positions are fractions of this box so they stay attached as it scales. */
+const HERO_W = 1024;
+const HERO_H = 573;
+/** Full left-cropped fit of that frame, then about 6% smaller so the limb stays clear of the ship. */
+const PLANET_D = Math.round(685 * 0.94);
+const PLANET_CX = 293;
+const PLANET_CY = HERO_H / 2;
+const PLANET_LEFT = PLANET_CX - PLANET_D / 2;
+const PLANET_TOP = PLANET_CY - PLANET_D / 2;
+const SHIP = { x: 808, y: 176, w: 156, h: 40 };
+const BASE = { x: 150, y: 448 };
+const LINK_CTRL = { x: 470, y: 318 };
+const LINK_END = { x: SHIP.x, y: SHIP.y + SHIP.h / 2 };
+const LINK_D = `M ${BASE.x} ${BASE.y} Q ${LINK_CTRL.x} ${LINK_CTRL.y} ${LINK_END.x} ${LINK_END.y}`;
+const LINK_LEN = quadLength(BASE.x, BASE.y, LINK_CTRL.x, LINK_CTRL.y, LINK_END.x, LINK_END.y);
+const SIGNAL_DASH = 16;
+const SIGNAL_PERIOD = SIGNAL_DASH + LINK_LEN;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+function quadLength(x0: number, y0: number, cx: number, cy: number, x1: number, y1: number) {
+  let length = 0;
+  let px = x0;
+  let py = y0;
+  for (let i = 1; i <= 32; i += 1) {
+    const t = i / 32;
+    const u = 1 - t;
+    const x = u * u * x0 + 2 * u * t * cx + t * t * x1;
+    const y = u * u * y0 + 2 * u * t * cy + t * t * y1;
+    length += Math.hypot(x - px, y - py);
+    px = x;
+    py = y;
+  }
+  return length;
+}
+
+function pctX(value: number) {
+  return `${(value / HERO_W) * 100}%` as const;
+}
+
+function pctY(value: number) {
+  return `${(value / HERO_H) * 100}%` as const;
+}
+
+function useReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+      setReduce(query.matches);
+      const onChange = () => setReduce(query.matches);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    }
+    let cancel = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (!cancel) setReduce(value);
+      })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduce);
+    return () => {
+      cancel = true;
+      sub.remove();
+    };
+  }, []);
+  return reduce;
+}
+
+function RelayCraft() {
+  return (
+    <View style={styles.craft} accessibilityLabel="Relay ship">
+      <View style={styles.wing}>
+        <View style={styles.cell} />
+        <View style={styles.cell} />
+        <View style={styles.cell} />
+      </View>
+      <View style={styles.busCol}>
+        <View style={styles.dish} />
+        <View style={styles.mast} />
+        <View style={styles.bus}>
+          <View style={styles.port} />
+        </View>
+      </View>
+      <View style={styles.wing}>
+        <View style={styles.cell} />
+        <View style={styles.cell} />
+        <View style={styles.cell} />
+      </View>
+    </View>
+  );
+}
+
+function RelayLink({ reduce }: { reduce: boolean }) {
+  const offset = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduce) {
+      offset.setValue(0);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.timing(offset, {
+        toValue: -SIGNAL_PERIOD,
+        duration: 6400,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [offset, reduce]);
+
+  return (
+    <Svg width="100%" height="100%" viewBox={`0 0 ${HERO_W} ${HERO_H}`} preserveAspectRatio="none" style={styles.link} pointerEvents="none">
+      <Circle cx={BASE.x} cy={BASE.y} r={10} fill="#F6D2B6" opacity={0.28} />
+      <Path d={LINK_D} stroke="#F2D3B8" strokeWidth={1.6} fill="none" strokeDasharray="5 7" strokeLinecap="round" />
+      {reduce ? null : (
+        <AnimatedPath
+          d={LINK_D}
+          stroke="#F8E6D4"
+          strokeWidth={2.2}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${SIGNAL_DASH} ${LINK_LEN}`}
+          strokeDashoffset={offset}
+        />
+      )}
+      <Circle cx={BASE.x} cy={BASE.y} r={3.4} fill="#F8E4D2" />
+    </Svg>
+  );
+}
+
 /** Clear plate below a light haze, storm plate fully in by a strong dust storm. */
 function stormOpacity(dark: number) {
   return Math.max(0, Math.min(1, (dark - 18) / (58 - 18)));
