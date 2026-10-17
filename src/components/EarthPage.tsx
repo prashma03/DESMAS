@@ -3,6 +3,7 @@ import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { ClinicLower } from "./EarthClinic";
+import { SceneScanOverlay } from "./SceneScanOverlay";
 import {
   batteryEstimate,
   GlassTag,
@@ -71,6 +72,7 @@ export function EarthPage({
           resizeMode="cover"
           accessibilityLabel="Off-grid clinic at night"
         />
+        <SceneScanOverlay tone="earth" />
         <View style={styles.phase}>
           <Text style={[styles.phaseBadge, { color: phaseColor, backgroundColor: night ? "rgba(158,208,255,0.16)" : "rgba(242,181,68,0.2)" }]}>{phase}</Text>
           <Text style={styles.phaseDetail} numberOfLines={2}>

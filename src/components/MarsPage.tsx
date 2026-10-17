@@ -25,6 +25,7 @@ import {
   StatRow,
   stormLabel,
 } from "./dashboard";
+import { SceneScanOverlay } from "./SceneScanOverlay";
 
 const CLEAR = require("../../assets/mars/surface-clear.jpg");
 const STORM = require("../../assets/mars/surface-storm.jpg");
@@ -39,49 +40,6 @@ function systemStatus(led: number, on: string, off: string) {
   if (led === 2) return "LOW POWER · LINK TO RELAY SHIP";
   return led > 0 ? on : off;
 }
-
-const SCAN_STYLE_ID = "desmas-mars-scan-style";
-
-function ensureScanCss() {
-  if (Platform.OS !== "web" || typeof document === "undefined" || document.getElementById(SCAN_STYLE_ID)) return;
-  const el = document.createElement("style");
-  el.id = SCAN_STYLE_ID;
-  el.textContent = `
-@keyframes desmas-mars-scan {
-  from { transform: translateY(0); }
-  to { transform: translateY(100%); }
-}
-#mars-scan {
-  animation: desmas-mars-scan 6.5s linear infinite;
-  will-change: transform;
-}
-#mars-scan::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 22px;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 214, 176, 0) 0%,
-    rgba(255, 206, 160, 0.06) 30%,
-    rgba(255, 228, 200, 0.32) 46%,
-    rgba(255, 246, 236, 0.78) 50%,
-    rgba(255, 228, 200, 0.32) 54%,
-    rgba(255, 206, 160, 0.06) 70%,
-    rgba(255, 214, 176, 0) 100%
-  );
-}
-@media (prefers-reduced-motion: reduce) {
-  #mars-scan { animation: none !important; }
-  #mars-scan::before { opacity: 0; }
-}
-`;
-  document.head.appendChild(el);
-}
-
-ensureScanCss();
 
 const SYSTEMS = [
   { name: "Life support", detail: "Green LED · air and heat" },
@@ -178,7 +136,7 @@ export function MarsPage({
           resizeMode="stretch"
           accessibilityLabel="Mars future base in a dust storm"
         />
-        <View nativeID="mars-scan" pointerEvents="none" style={styles.scan} />
+        <SceneScanOverlay tone="mars" />
         <View style={styles.phaseRow}>
           <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm]}>
             <Text style={[styles.pillTxt, { color: clearSky ? colors.ok : "#E7B08A" }]}>{phase}</Text>
@@ -295,7 +253,6 @@ const styles = StyleSheet.create({
   note: { color: colors.dim, fontSize: 12, lineHeight: 16 },
   scene: { width: "100%", aspectRatio: 1024 / 491, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#000" },
   photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
-  scan: { position: "absolute", left: 0, right: 0, top: 0, height: "100%", zIndex: 1 },
   stormFade: (Platform.OS === "web"
     ? { transitionProperty: "opacity", transitionDuration: "900ms", transitionTimingFunction: "ease" }
     : {}) as ImageStyle,

@@ -3,6 +3,7 @@ import { Animated, Image, Platform, StyleSheet, Text, View, type ImageStyle } fr
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
+import { SceneScanOverlay } from "./SceneScanOverlay";
 import { AiMonitor } from "./AIMonitor";
 import {
   AlertFeed,
@@ -101,6 +102,7 @@ export function MoonPage({
           resizeMode="cover"
           accessibilityLabel="Artemis base during lunar night"
         />
+        <SceneScanOverlay tone="moon" />
         {reading.alarm ? <Animated.View pointerEvents="none" style={[styles.alarm, { opacity: pulse }]} /> : null}
         <DayBadge
           label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : allOn ? "Lunar day · all systems on" : `Lunar night · ${onCount} of 4 on`}
