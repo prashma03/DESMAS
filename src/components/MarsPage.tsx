@@ -1,4 +1,6 @@
-import { Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
+import Svg, { Circle, Path } from "react-native-svg";
 import type { EarthDelay } from "../findings";
 import { kitFreshness, type KitEvent, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";

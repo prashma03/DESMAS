@@ -4,8 +4,8 @@ import Svg, { Circle, Line } from "react-native-svg";
 import { useScreen } from "../layout";
 
 type Star = {
-  left: string;
-  top: string;
+  left: `${number}%`;
+  top: `${number}%`;
   size: number;
   opacity: number;
   glow: number;
@@ -23,8 +23,8 @@ function starField(count: number): Star[] {
     const size = roll > 0.985 ? 5 : roll > 0.94 ? 3.5 : roll > 0.82 ? 2.5 : roll > 0.55 ? 1.5 : 1;
     const warm = next() > 0.82;
     return {
-      left: `${next() * 100}%`,
-      top: `${next() * 100}%`,
+      left: `${next() * 100}%` as `${number}%`,
+      top: `${next() * 100}%` as `${number}%`,
       size,
       opacity: size >= 3.5 ? 0.82 + next() * 0.18 : 0.22 + next() * 0.48,
       glow: size >= 3.5 ? size * 7 : size >= 2.5 && next() > 0.4 ? 11 : 0,
@@ -162,7 +162,7 @@ export function Starfield() {
   const figures = narrow ? CONSTELLATIONS.filter((fig) => fig.name === "cassiopeia" || fig.name === "cross") : CONSTELLATIONS;
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={styles.sky}>
       {STARS.map((star, i) => {
         const glow = star.glow;
         const box = glow || star.size;
@@ -231,5 +231,6 @@ export function Starfield() {
 }
 
 const styles = StyleSheet.create({
+  sky: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   figure: { position: "absolute", opacity: 0.9 },
 });

@@ -41,7 +41,6 @@ export default function App() {
               ? "Simulated"
               : "Simulated kit";
   const marsDelay = delay ? `${delay.oneWayMin.toFixed(1)} min` : "3 to 22 min";
-  const uptime = live ? formatUptime(Date.now() - kit.since) : "";
   const androidTop = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) : 0;
 
   useEffect(() => {
@@ -147,7 +146,7 @@ export default function App() {
           </Pressable>
         </View>
       ) : null}
-      <View style={shell.stage}>
+      <View style={[shell.stage, styles.stage]}>
         {world === "all" ? (
           <AllWorlds reading={kit.reading} source={kit.source} link={kit.link} marsDelay={marsDelay} onOpen={setWorld} />
         ) : (
@@ -168,12 +167,36 @@ export default function App() {
   );
 }
 
+function HardwareDiag({ kit }: { kit: ReturnType<typeof useKit> }) {
+  const [on, setOn] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    setOn(new URLSearchParams(window.location.search).get("diag") === "1");
+  }, []);
+  useEffect(() => {
+    if (!on) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [on]);
+  if (!on) return null;
+  const age = kit.lastAt > 0 ? `${Math.max(0, Math.round((now - kit.lastAt) / 1000))} s` : "none";
+  return (
+    <View pointerEvents="none" style={styles.diag}>
+      <Text style={styles.diagTxt}>{`link ${kit.link} · source ${kit.source} · last ${age}`}</Text>
+      <Text style={styles.diagTxt}>{`light ${Math.round(kit.reading.light)} · dark ${Math.round(kit.reading.dark)}% · hum ${kit.reading.hum.toFixed(1)}% · temp ${kit.reading.temp.toFixed(1)} °C`}</Text>
+      <Text style={styles.diagTxt}>{`alarm ${kit.reading.alarm} · dht ${kit.reading.dht} · leds ${kit.reading.leds.join(" ")}`}</Text>
+    </View>
+  );
+}
+
 function formatUptime(ms: number) {
   const s = Math.max(1, Math.round(ms / 1000));
   return s < 100 ? `${s} s` : `${Math.round(s / 60)} min`;
 }
 
 const styles = StyleSheet.create({
+  stage: { zIndex: 1 },
   notice: {
     zIndex: 2,
     marginHorizontal: 16,
@@ -242,4 +265,19 @@ const styles = StyleSheet.create({
   connect: { backgroundColor: colors.ink, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   connectCompact: { alignItems: "center" },
   connectTxt: { color: "#111", fontFamily: sans, fontWeight: "600", fontSize: 14 },
+  diag: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    zIndex: 8,
+    maxWidth: 420,
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  diagTxt: { color: colors.muted, fontFamily: mono, fontSize: 11, lineHeight: 16 },
 });

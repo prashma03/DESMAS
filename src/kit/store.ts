@@ -73,11 +73,13 @@ function simMayRun() {
 
 function startSim() {
   stopSim();
-  timer = setInterval(() => {
+  const handle = setInterval(() => {
     if (!simMayRun()) return;
     const reading = readingAt(Date.now() - started);
     applyReading(reading, JSON.stringify(reading));
   }, SIM_TICK_MS);
+  timer = handle;
+  if (typeof handle === "object" && handle && "unref" in handle) handle.unref();
 }
 
 function stopSim() {
