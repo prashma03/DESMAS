@@ -27,6 +27,7 @@ import {
   StatRow,
   stormLabel,
 } from "./dashboard";
+import { AllWorldsSpaceBackground } from "./AllWorldsSpaceBackground";
 import { SceneScanOverlay } from "./SceneScanOverlay";
 
 const CLEAR = require("../../assets/mars/surface-clear.jpg");
@@ -263,6 +264,9 @@ export function MarsPage({
     : `Solar input ${solar}% · power conservation active`;
 
   return (
+    <View style={styles.screen}>
+      <AllWorldsSpaceBackground />
+      <View style={styles.sheet}>
     <Page>
       <View
         nativeID="surface"
@@ -273,7 +277,7 @@ export function MarsPage({
         }}
       >
         <View style={styles.planet}>
-          <PlanetFill kind="mars" />
+          <PlanetFill kind="mars" spinScale={0.82} />
         </View>
         <RelayLink reduce={reduceMotion} bob={bob} orbitH={orbitH} />
         <View style={styles.ship}>
@@ -418,10 +422,14 @@ export function MarsPage({
         <AiMonitor world="mars" reading={reading} source={source} delay={delay ?? undefined} />
       </Lower>
     </Page>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, minHeight: 0 },
+  sheet: { flex: 1, minHeight: 0, zIndex: 1 },
   slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
   orbit: {
     width: "100%",
@@ -430,7 +438,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: "#05060a",
+    backgroundColor: "transparent",
   },
   planet: {
     position: "absolute",

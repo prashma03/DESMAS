@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
 
 /**
- * Decorative sky for the All Worlds page only. One canvas, no React updates
+ * Decorative sky behind All Worlds and the Mars dashboard. One canvas, no React updates
  * while it animates. Unmounting the page clears the frame loop and comet timer.
  */
 

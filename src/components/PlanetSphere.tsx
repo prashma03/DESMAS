@@ -75,8 +75,9 @@ function createRenderer(gl: ExpoWebGLRenderingContext) {
   return renderer;
 }
 
-async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: Life) {
+async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: Life, spinScale = 1) {
   const motion = MOTION[kind];
+  const spinRate = motion.spin * spinScale;
   const renderer = createRenderer(gl);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -153,8 +154,8 @@ async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: 
       camera.updateProjectionMatrix();
     }
     const t = clock.getElapsedTime();
-    spin.rotation.y = t * motion.spin;
-    cloudSpin.rotation.y = t * motion.spin * 1.45;
+    spin.rotation.y = t * spinRate;
+    cloudSpin.rotation.y = t * spinRate * 1.45;
     renderer.render(scene, camera);
     gl.endFrameEXP();
     requestAnimationFrame(loop);
@@ -188,7 +189,7 @@ async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: 
   }
 }
 
-export function PlanetSphere({ kind }: { kind: WorldKey }) {
+export function PlanetSphere({ kind, spinScale = 1 }: { kind: WorldKey; spinScale?: number }) {
   const life = useRef<Life>({ alive: true });
 
   useEffect(() => {
@@ -204,7 +205,7 @@ export function PlanetSphere({ kind }: { kind: WorldKey }) {
       <GLView
         style={styles.fill}
         onContextCreate={(gl) => {
-          mountPlanet(gl, kind, life.current).catch(() => {
+          mountPlanet(gl, kind, life.current, spinScale).catch(() => {
             /* the colored sphere stays up if a texture cannot load */
           });
         }}

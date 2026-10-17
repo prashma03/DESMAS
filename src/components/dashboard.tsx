@@ -78,8 +78,8 @@ export function Page({ children }: { children: ReactNode }) {
   );
 }
 
-export function PlanetFill({ kind }: { kind: WorldKey }) {
-  return <PlanetSphere kind={kind} />;
+export function PlanetFill({ kind, spinScale }: { kind: WorldKey; spinScale?: number }) {
+  return <PlanetSphere kind={kind} spinScale={spinScale} />;
 }
 
 export function GlassTag({
