@@ -11,8 +11,26 @@ import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
-import { Starfield } from "./src/components/Starfield";
 import { useScreen } from "./src/layout";
+
+function starField(count: number) {
+  let seed = 20261017;
+  const next = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  return Array.from({ length: count }, () => {
+    const roll = next();
+    return {
+      left: `${next() * 100}%` as const,
+      top: `${next() * 100}%` as const,
+      size: roll > 0.94 ? 3 : roll > 0.72 ? 2 : 1,
+      opacity: 0.28 + next() * 0.5,
+    };
+  });
+}
+
+const STARS = starField(150);
 const NAV: { id: WorldId; label: string }[] = [
   { id: "all", label: "All worlds" },
   { id: "earth", label: "Earth" },
@@ -85,7 +103,23 @@ export default function App() {
   return (
     <SafeAreaView style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}>
       <StatusBar style="light" />
-      <Starfield />
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {STARS.map((star, i) => (
+          <View
+            key={i}
+            style={{
+              position: "absolute",
+              left: star.left,
+              top: star.top,
+              width: star.size,
+              height: star.size,
+              borderRadius: 2,
+              backgroundColor: "#fff",
+              opacity: star.opacity,
+            }}
+          />
+        ))}
+      </View>
       <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
         <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
           <View style={styles.brand}>

@@ -196,7 +196,8 @@ export function MarsPage({
   delay: EarthDelay | null;
   link?: LinkStatus;
 }) {
-  const { narrow, width } = useScreen();
+  const { narrow } = useScreen();
+  const reduceMotion = useReducedMotion();
   const fresh = kitFreshness(source, link);
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("mars", reading.dark);
@@ -206,7 +207,6 @@ export function MarsPage({
   const thick = reading.dark >= 30;
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
-  const planet = narrow ? Math.min(150, Math.round(width * 0.36)) : 300;
   const clearSky = reading.dark < 30;
   const active = colors.green;
   const cover = { backgroundColor: "rgba(10,8,6,0.96)" as const, zIndex: 5 };
@@ -226,16 +226,18 @@ export function MarsPage({
 
   return (
     <Page>
-      <View nativeID="surface" style={[styles.orbit, narrow ? { height: 300 } : null]}>
-        <View style={[styles.planet, { width: planet, height: planet, borderRadius: planet / 2 }, narrow ? { left: 16, top: 44 } : null]}>
+      <View nativeID="surface" style={styles.orbit}>
+        <View style={styles.planet}>
           <PlanetFill kind="mars" />
         </View>
-        <View style={[styles.ship, narrow ? { right: "8%" as const, top: "22%" as const } : null]} />
-        <View style={styles.dash} />
+        <RelayLink reduce={reduceMotion} />
+        <View style={styles.ship}>
+          <RelayCraft />
+        </View>
         {narrow ? null : (
           <>
-            <GlassTag title="Relay ship" line="Fixes its own faults" color="#FFC59E" style={{ right: "16%", top: "28%" }} />
-            <GlassTag title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} style={{ left: "22%", top: "58%" }} />
+            <GlassTag title="Relay ship" line="FIXES ITS OWN FAULTS" color={colors.green} style={styles.shipTag} />
+            <GlassTag title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} style={styles.baseTag} />
             <View style={styles.delayPill}>
               <Text style={styles.delayTxt}>{linkLine}</Text>
             </View>
@@ -252,7 +254,7 @@ export function MarsPage({
       {narrow ? (
         <>
           <Legend>
-            <GlassTag inline title="Relay ship" line="Fixes its own faults" color="#FFC59E" />
+            <GlassTag inline title="Relay ship" line="FIXES ITS OWN FAULTS" color={colors.green} />
             <GlassTag inline title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} />
             <GlassTag inline title="Earth link" line={linkLine.replace("Earth · ", "")} color="#FFC59E" />
           </Legend>
@@ -376,10 +378,53 @@ export function MarsPage({
 
 const styles = StyleSheet.create({
   slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
-  orbit: { height: 420, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#05060a" },
-  planet: { position: "absolute", left: 36, top: 36, width: 300, height: 300, borderRadius: 150, overflow: "hidden" },
-  ship: { position: "absolute", right: "22%", top: "24%", width: 16, height: 10, borderRadius: 5, backgroundColor: "#f4f1ea" },
-  dash: { position: "absolute", left: "28%", top: "34%", width: "36%", height: 1, backgroundColor: "rgba(255,197,158,0.7)" },
+  orbit: {
+    width: "100%",
+    aspectRatio: HERO_W / HERO_H,
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: "#05060a",
+  },
+  planet: {
+    position: "absolute",
+    left: pctX(PLANET_LEFT),
+    top: pctY(PLANET_TOP),
+    width: pctX(PLANET_D),
+    height: pctY(PLANET_D),
+    borderRadius: PLANET_D,
+    overflow: "hidden",
+    zIndex: 1,
+  },
+  link: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 2 },
+  ship: {
+    position: "absolute",
+    left: pctX(SHIP.x),
+    top: pctY(SHIP.y),
+    width: pctX(SHIP.w),
+    height: pctY(SHIP.h),
+    zIndex: 4,
+  },
+  shipTag: { right: "2%", top: pctY(SHIP.y + SHIP.h + 8), zIndex: 6, maxWidth: "28%" },
+  baseTag: { left: pctX(72), top: pctY(BASE.y - 62), zIndex: 6 },
+  craft: { flex: 1, height: "100%", flexDirection: "row", alignItems: "center" },
+  wing: { flex: 1, height: "28%", flexDirection: "row", gap: 1, backgroundColor: "#0c1524", padding: 1 },
+  cell: { flex: 1, backgroundColor: "#1b2d4c" },
+  busCol: { width: "20%", height: "100%", alignItems: "center", justifyContent: "center" },
+  dish: { width: "78%", height: "22%", borderRadius: 8, backgroundColor: "#d4b483", borderWidth: 1, borderColor: "#f3ead8" },
+  mast: { width: 1, height: "8%", backgroundColor: "#efe6d4" },
+  bus: {
+    width: "100%",
+    height: "42%",
+    borderRadius: 4,
+    backgroundColor: "#f7f4ee",
+    borderWidth: 1,
+    borderColor: "#ddd6cb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  port: { width: "42%", height: "28%", borderRadius: 2, backgroundColor: "#c8c1b6" },
   delayPill: { position: "absolute", top: 16, right: 16, zIndex: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(8,10,14,0.72)", borderWidth: 1, borderColor: colors.line },
   delayTxt: { color: "#FFC59E", fontSize: 11, letterSpacing: 0.6 },
   stormCard: { position: "absolute", right: 16, bottom: 16, zIndex: 3, width: 220, maxWidth: "42%", padding: 12, borderRadius: 16, backgroundColor: "rgba(8,10,14,0.82)", borderWidth: 1, borderColor: colors.line, gap: 4 },

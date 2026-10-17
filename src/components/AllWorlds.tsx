@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutCha
 import { kitFreshness, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
+import { AllWorldsSpaceBackground } from "./AllWorldsSpaceBackground";
 import { mono, PlanetFill, sans, stormLabel } from "./dashboard";
 
 type Id = "earth" | "moon" | "mars";
@@ -77,7 +78,9 @@ export function AllWorlds({
   };
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
+    <>
+    <AllWorldsSpaceBackground />
+    <ScrollView style={[styles.scroll, styles.aboveSky]} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
       <View style={styles.intro}>
         <Pressable style={styles.live} onPress={() => onOpen("moon")}>
           <Text style={styles.liveMark}>LIVE</Text>
@@ -129,6 +132,7 @@ export function AllWorlds({
         <Text style={styles.footTxt}>Planet textures: Solar System Scope, CC BY 4.0, based on NASA imagery</Text>
       </View>
     </ScrollView>
+    </>
   );
 }
 
@@ -254,8 +258,10 @@ function caption(id: Id, reading: KitReading) {
     return {
       name: "Moon",
       kicker: "02 · Live hardware",
-      status: alarm ? `Humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${on} of 4 on` : "Lunar day · all on",
-      color: alarm ? colors.alert : night ? colors.watch : colors.ok,
+      status: alarm
+        ? `Humidity ${Math.round(reading.hum)}%`
+        : `${night ? "Lunar night" : "Lunar day"} · ${on === 4 ? "all on" : `${on} of 4 on`}`,
+      color: alarm ? colors.alert : night || on < 4 ? colors.watch : colors.ok,
     };
   }
   const level = reading.dark >= 85 ? colors.alert : reading.dark >= 30 ? colors.watch : colors.ok;
@@ -269,6 +275,7 @@ function caption(id: Id, reading: KitReading) {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 },
+  aboveSky: { zIndex: 1 },
   page: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18, width: "100%", maxWidth: 1520, alignSelf: "center" },
   pageCompact: { paddingHorizontal: 14, paddingTop: 16 },
   intro: { alignItems: "center", gap: 12, width: "100%" },
