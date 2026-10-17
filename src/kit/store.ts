@@ -1,5 +1,6 @@
+import { parseMessage } from "../serial/parse";
 import { eventsFromTransition, readingAt, SIM_TICK_MS } from "./simulate";
-import type { KitEvent, KitReading, KitSource } from "./types";
+import type { KitEvent, KitReading, KitSource, LinkStatus } from "./types";
 
 const HISTORY = 60;
 const LINES = 6;
@@ -8,7 +9,9 @@ type Listener = () => void;
 
 type State = {
   source: KitSource;
+  link: LinkStatus;
   since: number;
+  lastAt: number;
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
@@ -28,7 +31,9 @@ function seed(): State {
   nextEventId += intro.length;
   return {
     source: "simulated",
+    link: "simulated",
     since: started,
+    lastAt: 0,
     reading,
     history: [reading],
     events: intro,
@@ -62,10 +67,14 @@ function applyReading(reading: KitReading, raw: string) {
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
+function simMayRun() {
+  return state.source === "simulated" && (state.link === "simulated" || state.link === "error");
+}
+
 function startSim() {
   stopSim();
   timer = setInterval(() => {
-    if (state.source !== "simulated") return;
+    if (!simMayRun()) return;
     const reading = readingAt(Date.now() - started);
     applyReading(reading, JSON.stringify(reading));
   }, SIM_TICK_MS);
@@ -74,29 +83,6 @@ function startSim() {
 function stopSim() {
   if (timer) clearInterval(timer);
   timer = undefined;
-}
-
-const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
-const bit = (v: unknown): 0 | 1 => (v ? 1 : 0);
-const led = (v: unknown): 0 | 1 | 2 => (v === 0 ? 0 : v === 2 ? 2 : 1);
-
-function fromBoard(j: Record<string, unknown>, last: KitReading | null): KitReading {
-  const leds: unknown[] = Array.isArray(j.leds) ? j.leds : [];
-  const hbase = num(j.hbase, last?.hbase ?? 52);
-  return {
-    ms: num(j.ms, 0),
-    light: num(j.light, 0),
-    lbase: num(j.lbase, last?.lbase ?? 0),
-    dark: num(j.dark, 0),
-    hum: num(j.hum, last ? last.hum : hbase),
-    hbase,
-    cut: num(j.cut, hbase + 10),
-    temp: num(j.temp, last ? last.temp : 0),
-    alarm: bit(j.alarm),
-    muted: bit(j.muted),
-    dht: bit(j.dht),
-    leds: [led(leds[0]), led(leds[1]), led(leds[2]), led(leds[3])],
-  };
 }
 
 startSim();
@@ -109,18 +95,39 @@ export const kitStore = {
   getSnapshot(): State {
     return state;
   },
-  goLive() {
-    prev = null;
-    state = {
-      ...state,
-      source: "serial",
-      since: Date.now(),
-      history: [],
-      events: [],
-      lines: [],
-      notice: "",
-    };
+  /** Port chosen, not open yet. Simulation pauses so it cannot race the board. */
+  markConnecting() {
+    if (state.link === "live" || state.link === "connected") return;
+    state = { ...state, link: "connecting", notice: "" };
     emit();
+  },
+  /** Port is open. Still not "Arduino live" until a valid reading arrives. */
+  markConnected() {
+    state = { ...state, link: "connected", since: Date.now(), notice: "" };
+    emit();
+  },
+  markStale() {
+    if (state.link !== "live") return;
+    state = { ...state, link: "stale" };
+    emit();
+  },
+  /** USB dropped or the stream stopped. Keep the last board reading and do not start the simulation over it. */
+  markDisconnected(notice = "") {
+    if (state.source !== "serial") {
+      state = { ...state, link: "simulated", notice };
+      emit();
+      return;
+    }
+    state = { ...state, link: "disconnected", notice };
+    emit();
+  },
+  markError(notice: string) {
+    const backToSim = state.source !== "serial";
+    state = { ...state, link: backToSim ? "error" : "disconnected", notice };
+    emit();
+  },
+  goLive() {
+    kitStore.markConnected();
   },
   goSim(notice = "") {
     started = Date.now();
@@ -131,7 +138,9 @@ export const kitStore = {
     nextEventId += intro.length;
     state = {
       source: "simulated",
+      link: "simulated",
       since: started,
+      lastAt: 0,
       reading,
       history: [reading],
       events: intro,
@@ -143,37 +152,56 @@ export const kitStore = {
   },
   ingestLine(line: string) {
     const text = line.trim();
-    if (!text.startsWith("{")) return;
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      return;
+    if (!text.startsWith("{")) return false;
+    const parsed = parseMessage(text, prev);
+    if (!parsed.ok) return false;
+    if (parsed.type === "calibrated") {
+      const event: KitEvent = {
+        id: nextEventId++,
+        at: Date.now(),
+        kind: "INFO",
+        message: `Recalibrated. Light ${Math.round(parsed.lbase)}, humidity ${Math.round(parsed.hbase)}%.`,
+      };
+      state = {
+        ...state,
+        events: [event, ...state.events].slice(0, 24),
+        lines: [...state.lines, text].slice(-LINES),
+        seq: state.seq + 1,
+      };
+      emit();
+      return true;
     }
-    const isReading = Array.isArray(parsed.leds);
-    if (!isReading && parsed.event !== "calibrated") return;
-    if (state.source !== "serial") kitStore.goLive();
-    if (isReading) {
-      applyReading(fromBoard(parsed, prev), text);
-      return;
-    }
-    const hbase = Math.round(num(parsed.hbase, 0));
-    const event: KitEvent = {
-      id: nextEventId++,
-      at: Date.now(),
-      kind: "INFO",
-      message: `Recalibrated. Light ${num(parsed.lbase, 0)}, humidity ${hbase}%.`,
-    };
+    const first = state.source !== "serial";
+    const events = first
+      ? [
+          {
+            id: nextEventId,
+            at: Date.now(),
+            kind: "INFO" as const,
+            message: "Arduino connected. Readings are live.",
+          },
+        ]
+      : eventsFromTransition(prev, parsed.reading, nextEventId);
+    nextEventId += events.length;
+    prev = parsed.reading;
     state = {
       ...state,
-      events: [event, ...state.events].slice(0, 24),
-      lines: [...state.lines, text].slice(-LINES),
+      source: "serial",
+      link: "live",
+      lastAt: Date.now(),
+      reading: parsed.reading,
+      history: [...(first ? [] : state.history), parsed.reading].slice(-HISTORY),
+      events: [...events.reverse(), ...(first ? [] : state.events)].slice(0, 24),
+      lines: [...(first ? [] : state.lines), text].slice(-LINES),
       seq: state.seq + 1,
+      notice: "",
     };
     emit();
+    return true;
   },
   setNotice(notice: string) {
-    state = { ...state, notice };
+    const link = notice === "" && state.link === "error" && state.source === "simulated" ? "simulated" : state.link;
+    state = { ...state, notice, link };
     emit();
   },
 };

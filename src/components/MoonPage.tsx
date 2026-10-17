@@ -1,5 +1,5 @@
 import { Image, Platform, StyleSheet, Text, View, type ImageStyle, type ViewStyle } from "react-native";
-import type { KitEvent, KitReading, KitSource } from "../kit/types";
+import { kitFreshness, type KitEvent, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { SceneScanOverlay } from "./SceneScanOverlay";
@@ -91,14 +91,17 @@ export function MoonPage({
   events,
   source,
   lines,
+  link,
 }: {
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
   source: KitSource;
   lines: string[];
+  link?: LinkStatus;
 }) {
   const { narrow } = useScreen();
+  const fresh = kitFreshness(source, link);
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("moon", reading.dark);
   const allOn = reading.leds.every((v) => v > 0);
@@ -147,7 +150,8 @@ export function MoonPage({
         <SceneTitle kicker="02 · Moon · lunar south pole" title="Artemis base" />
         {narrow ? null : (
           <KitReadout
-            live={source === "serial"}
+            live={fresh.live}
+            mark={fresh.mark}
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
@@ -167,7 +171,8 @@ export function MoonPage({
           </Legend>
           <KitReadout
             inline
-            live={source === "serial"}
+            live={fresh.live}
+            mark={fresh.mark}
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}
@@ -220,7 +225,7 @@ export function MoonPage({
             <AlertFeed world="moon" events={events} />
           </View>
         </Split>
-        <SerialLog lines={lines} live={source === "serial"} />
+        <SerialLog lines={lines} live={fresh.live} mark={fresh.mark} />
         <AiMonitor world="moon" reading={reading} source={source} />
       </Lower>
     </Page>

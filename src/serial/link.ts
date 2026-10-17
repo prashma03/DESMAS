@@ -1,4 +1,6 @@
-// Web Serial link to the DESMAS board. Opens the port at 9600 baud and reports lines to the kit store.
+// Web Serial link to the DESMAS board. Opens the port at 9600 baud and reports JSON objects to the kit store.
+
+import { pullMessages } from "./parse";
 
 type SerialPortLike = EventTarget & {
   readable: ReadableStream<Uint8Array> | null;
@@ -13,6 +15,7 @@ type SerialLike = EventTarget & {
 };
 
 export type BoardHandlers = {
+  onConnecting: () => void;
   onOpen: () => void;
   onLine: (line: string) => void;
   onClose: (notice: string) => void;
@@ -50,14 +53,15 @@ export function createBoardLink(handlers: BoardHandlers) {
   async function open(candidate: SerialPortLike) {
     if (port || opening) return;
     opening = true;
+    handlers.onConnecting();
     try {
       await candidate.open({ baudRate: BAUD_RATE, bufferSize: BUFFER_BYTES });
     } catch {
+      opening = false;
       handlers.onNotice(NOTICES.busy);
       return;
-    } finally {
-      opening = false;
     }
+    opening = false;
     port = candidate;
     handlers.onOpen();
     reading = readLines(candidate);
@@ -66,24 +70,29 @@ export function createBoardLink(handlers: BoardHandlers) {
   async function readLines(p: SerialPortLike) {
     const decoder = new TextDecoder();
     let buffer = "";
-    while (p.readable && !closing) {
+    let failures = 0;
+    while (p.readable && !closing && failures < 3) {
       const r = p.readable.getReader();
       reader = r;
       try {
         for (;;) {
           const { value, done } = await r.read();
-          if (done) break;
+          if (done) {
+            closing = true;
+            break;
+          }
+          failures = 0;
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split(/\r?\n/);
-          buffer = lines.pop() ?? "";
-          for (const line of lines) handlers.onLine(line);
+          const pulled = pullMessages(buffer);
+          buffer = pulled.rest;
+          for (const message of pulled.messages) handlers.onLine(message);
           if (buffer.length > MAX_LINE) buffer = "";
         }
       } catch {
-        // A framing error ends one reader. Take another while the port stays open.
+        failures += 1;
       } finally {
         r.releaseLock();
-        reader = null;
+        if (reader === r) reader = null;
       }
     }
     await p.close().catch(() => {});
@@ -99,7 +108,7 @@ export function createBoardLink(handlers: BoardHandlers) {
       handlers.onNotice(globalThis.isSecureContext === false ? NOTICES.insecure : NOTICES.noSerial);
       return;
     }
-    if (port) return;
+    if (port || opening) return;
     let picked: SerialPortLike;
     try {
       picked = await serial.requestPort();
@@ -118,7 +127,11 @@ export function createBoardLink(handlers: BoardHandlers) {
     const plugged = (e: Event) => {
       if (active) void open(e.target as SerialPortLike);
     };
+    const unplugged = (e: Event) => {
+      if (active && e.target === port) void disconnect();
+    };
     serial.addEventListener("connect", plugged);
+    serial.addEventListener("disconnect", unplugged);
     serial
       .getPorts()
       .then((ports) => {
@@ -128,6 +141,7 @@ export function createBoardLink(handlers: BoardHandlers) {
     return () => {
       active = false;
       serial.removeEventListener("connect", plugged);
+      serial.removeEventListener("disconnect", unplugged);
       void disconnect();
     };
   }

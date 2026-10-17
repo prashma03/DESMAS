@@ -136,6 +136,7 @@ export function KitReadout({
   note,
   inline,
   muted,
+  mark,
 }: {
   live: boolean;
   dark: number;
@@ -144,12 +145,15 @@ export function KitReadout({
   note: string;
   inline?: boolean;
   muted?: 0 | 1;
+  mark?: string;
 }) {
+  const badge = mark ?? (live ? "Live" : "Simulated");
+  const badgeColor = live ? colors.ok : badge === "Stale" ? colors.watch : colors.gold;
   return (
     <View style={inline ? styles.kitInline : styles.kitCard}>
       <View style={styles.kitHead}>
         <Text style={styles.kicker}>From the kit</Text>
-        <Text style={[styles.kicker, { color: live ? colors.ok : colors.gold }]}>{live ? "Live" : "Simulated"}</Text>
+        <Text style={[styles.kicker, { color: badgeColor }]}>{badge}</Text>
       </View>
       <View style={styles.kitNums}>
         <KitNum label="Dark · A0" value={`${Math.round(dark)}%`} />
@@ -404,8 +408,9 @@ export function HumidityChart({ history, reading }: { history: KitReading[]; rea
   );
 }
 
-export function SerialLog({ lines, live }: { lines: string[]; live: boolean }) {
+export function SerialLog({ lines, live, mark }: { lines: string[]; live: boolean; mark?: string }) {
   const shown = lines.slice(-6);
+  const detail = live ? "2 lines a second · live" : mark === "Stale" ? "last reading · stale" : "2 lines a second · simulated";
   return (
     <View nativeID="serial" style={styles.panel}>
       <View style={styles.powerHead}>
@@ -413,7 +418,7 @@ export function SerialLog({ lines, live }: { lines: string[]; live: boolean }) {
           <Text style={styles.kicker}>Raw serial · USB · 9600 baud</Text>
           <Text style={styles.panelTitle}>What the Arduino sends</Text>
         </View>
-        <Text style={[styles.kicker, { flexShrink: 1 }]}>{live ? "2 lines a second · live" : "2 lines a second · simulated"}</Text>
+        <Text style={[styles.kicker, { flexShrink: 1 }]}>{detail}</Text>
       </View>
       <Text style={styles.serial}>{shown.length ? `${shown.join("\n\n")}\n▍` : "Waiting for lines…"}</Text>
     </View>

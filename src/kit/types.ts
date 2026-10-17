@@ -26,4 +26,17 @@ export type KitEvent = {
 
 export type KitSource = "simulated" | "serial";
 
+/** Transport state. "live" is the only status that means a valid reading just arrived. */
+export type LinkStatus = "simulated" | "connecting" | "connected" | "live" | "stale" | "disconnected" | "error";
+
+export function kitFreshness(source: KitSource, link?: LinkStatus): {
+  live: boolean;
+  mark: "Live" | "Simulated" | "Stale" | "Connecting";
+} {
+  if (link === "live" || (link === undefined && source === "serial")) return { live: true, mark: "Live" };
+  if (link === "stale" || link === "disconnected") return { live: false, mark: "Stale" };
+  if (link === "connecting" || link === "connected") return { live: false, mark: "Connecting" };
+  return { live: false, mark: "Simulated" };
+}
+
 export type WorldId = "all" | "earth" | "moon" | "mars";

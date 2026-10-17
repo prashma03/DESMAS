@@ -5,12 +5,13 @@ import { AllWorlds } from "./src/components/AllWorlds";
 import { WorldView } from "./src/components/WorldView";
 import type { EarthDelay } from "./src/findings";
 import { kitStore } from "./src/kit/store";
-import type { WorldId } from "./src/kit/types";
+import { kitFreshness, type WorldId } from "./src/kit/types";
 import { board } from "./src/serial/board";
 import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
+import { Starfield } from "./src/components/Starfield";
 import { useScreen } from "./src/layout";
 const NAV: { id: WorldId; label: string }[] = [
   { id: "all", label: "All worlds" },
@@ -19,31 +20,26 @@ const NAV: { id: WorldId; label: string }[] = [
   { id: "mars", label: "Mars" },
 ];
 
-function starField(count: number) {
-  let seed = 20261017;
-  const next = () => {
-    seed = (seed * 16807) % 2147483647;
-    return (seed - 1) / 2147483646;
-  };
-  return Array.from({ length: count }, () => {
-    const roll = next();
-    return {
-      left: `${next() * 100}%` as const,
-      top: `${next() * 100}%` as const,
-      size: roll > 0.94 ? 3 : roll > 0.72 ? 2 : 1,
-      opacity: 0.28 + next() * 0.5,
-    };
-  });
-}
-
-const STARS = starField(150);
-
 export default function App() {
   const kit = useKit();
   const { compact, narrow } = useScreen();
   const [world, setWorld] = useState<WorldId>("all");
   const [delay, setDelay] = useState<EarthDelay | null>(null);
-  const live = kit.source === "serial";
+  const fresh = kitFreshness(kit.source, kit.link);
+  const live = fresh.live;
+  const portBusy = kit.link === "connecting" || kit.link === "connected" || kit.link === "live";
+  const badge =
+    kit.link === "live"
+      ? `Arduino live · ${formatUptime(Date.now() - kit.lastAt)}`
+      : kit.link === "connecting" || kit.link === "connected"
+        ? "Connecting"
+        : kit.link === "stale" || kit.link === "disconnected"
+          ? "Stale"
+          : kit.link === "error"
+            ? "Error"
+            : narrow
+              ? "Simulated"
+              : "Simulated kit";
   const marsDelay = delay ? `${delay.oneWayMin.toFixed(1)} min` : "3 to 22 min";
   const uptime = live ? formatUptime(Date.now() - kit.since) : "";
   const androidTop = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) : 0;
@@ -90,23 +86,7 @@ export default function App() {
   return (
     <SafeAreaView style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}>
       <StatusBar style="light" />
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {STARS.map((star, i) => (
-          <View
-            key={i}
-            style={{
-              position: "absolute",
-              left: star.left,
-              top: star.top,
-              width: star.size,
-              height: star.size,
-              borderRadius: 2,
-              backgroundColor: "#fff",
-              opacity: star.opacity,
-            }}
-          />
-        ))}
-      </View>
+      <Starfield />
       <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
         <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
           <View style={styles.brand}>
@@ -117,8 +97,8 @@ export default function App() {
           </View>
           {compact ? (
             <View style={[styles.sim, live ? styles.simLive : null, styles.simCompact]}>
-              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
-              <Text numberOfLines={1} style={styles.simTxt}>{live ? `Live · ${uptime}` : narrow ? "Simulated" : "Simulated kit"}</Text>
+              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : fresh.mark === "Stale" ? colors.watch : colors.gold }]} />
+              <Text numberOfLines={1} style={styles.simTxt}>{badge}</Text>
             </View>
           ) : null}
         </View>
@@ -134,7 +114,7 @@ export default function App() {
           })}
         </View>
         {compact ? (
-          live ? null : (
+          portBusy ? null : (
             <Pressable
               style={[styles.connect, styles.connectCompact]}
               onPress={() => void board.connect()}
@@ -145,10 +125,10 @@ export default function App() {
         ) : (
           <View style={styles.tools}>
             <View style={[styles.sim, live ? styles.simLive : null]}>
-              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : colors.gold }]} />
-              <Text style={styles.simTxt}>{live ? `Arduino live · ${uptime}` : "Simulated kit"}</Text>
+              <View style={[styles.simDot, { backgroundColor: live ? colors.ok : fresh.mark === "Stale" ? colors.watch : colors.gold }]} />
+              <Text style={styles.simTxt}>{badge}</Text>
             </View>
-            {live ? null : (
+            {portBusy ? null : (
               <Pressable
                 style={styles.connect}
                 onPress={() => void board.connect()}
@@ -169,7 +149,7 @@ export default function App() {
       ) : null}
       <View style={shell.stage}>
         {world === "all" ? (
-          <AllWorlds reading={kit.reading} source={kit.source} marsDelay={marsDelay} onOpen={setWorld} />
+          <AllWorlds reading={kit.reading} source={kit.source} link={kit.link} marsDelay={marsDelay} onOpen={setWorld} />
         ) : (
           <WorldView
             world={world}
@@ -179,9 +159,11 @@ export default function App() {
             lines={kit.lines}
             delay={delay}
             source={kit.source}
+            link={kit.link}
           />
         )}
       </View>
+      <HardwareDiag kit={kit} />
     </SafeAreaView>
   );
 }

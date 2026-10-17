@@ -1,6 +1,6 @@
 import { Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
 import type { EarthDelay } from "../findings";
-import type { KitEvent, KitReading, KitSource } from "../kit/types";
+import { kitFreshness, type KitEvent, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { board } from "../serial/board";
 import { colors } from "../theme";
@@ -54,14 +54,17 @@ export function MarsPage({
   events,
   source,
   delay,
+  link,
 }: {
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
   source: KitSource;
   delay: EarthDelay | null;
+  link?: LinkStatus;
 }) {
   const { narrow, width } = useScreen();
+  const fresh = kitFreshness(source, link);
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("mars", reading.dark);
   const storm = stormLabel(reading.dark);
@@ -77,7 +80,7 @@ export function MarsPage({
   const tags = [
     { title: "Comms tower", line: systemStatus(reading.leds[1], "ON · LINK TO RELAY SHIP", "OFF"), color: reading.leds[1] === 2 ? colors.gold : active, on: reading.leds[1] > 0, style: { ...cover, left: "38%" as const, top: "14%" as const, minWidth: 168 } },
     { title: "Science lab", line: on(2) ? "ON" : "OFF · SAVING POWER", color: active, on: on(2), style: { ...cover, left: "18%" as const, top: "42%" as const, minWidth: 156 } },
-    { title: "Hab · life support", line: on(0) ? `ON · HUMIDITY ${Math.round(reading.hum)}%` : "OFF", color: active, on: on(0), style: { ...cover, left: "39%" as const, top: "34%" as const, minWidth: 168 } },
+    { title: "Hab · life support", line: reading.alarm ? `ALERT · HUMIDITY ${Math.round(reading.hum)}%` : on(0) ? `ON · HUMIDITY ${Math.round(reading.hum)}%` : "OFF", color: reading.alarm ? colors.alert : active, on: reading.alarm ? true : on(0), style: { ...cover, left: "39%" as const, top: "34%" as const, minWidth: 168 } },
     { title: "Comfort dome", line: on(3) ? "ON" : "OFF · SAVING POWER", color: active, on: on(3), style: { ...cover, left: "63%" as const, top: "58%" as const, minWidth: 156 } },
     { title: "Solar arrays", line: thick ? `DUST · ${solar}%` : `CHARGING · ${solar}%`, color: colors.gold, on: true, style: { ...cover, right: "7%" as const, top: "16%" as const, minWidth: 132 } },
   ];
@@ -154,7 +157,7 @@ export function MarsPage({
           <View style={styles.advice}>
             <Text style={styles.warmKicker}>The AI advises this crew</Text>
             <Text style={styles.adviceTxt}>{ADVICE}</Text>
-            {source === "serial" ? (
+            {fresh.live ? (
               <View style={styles.cmdRow}>
                 <Pressable style={styles.cmd} onPress={() => void board.send("c")}>
                   <Text style={styles.cmdTxt}>Recalibrate</Text>
@@ -180,7 +183,8 @@ export function MarsPage({
           </View>
           <KitReadout
             inline
-            live={source === "serial"}
+            live={fresh.live}
+            mark={fresh.mark}
             dark={reading.dark}
             hum={reading.hum}
             temp={reading.temp}

@@ -1,5 +1,5 @@
 import { Image, Platform, StyleSheet, Text, View, type ImageStyle, type ViewStyle } from "react-native";
-import type { KitEvent, KitReading, KitSource } from "../kit/types";
+import { kitFreshness, type KitEvent, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { ClinicLower } from "./EarthClinic";
@@ -34,13 +34,16 @@ export function EarthPage({
   history,
   events,
   source,
+  link,
 }: {
   reading: KitReading;
   history: KitReading[];
   events: KitEvent[];
   source: KitSource;
+  link?: LinkStatus;
 }) {
   const { narrow, width } = useScreen();
+  const fresh = kitFreshness(source, link);
   const stacked = narrow || width < 1100;
   const battery = batteryEstimate("earth", reading.dark);
   const dark = Math.round(reading.dark);
@@ -93,7 +96,7 @@ export function EarthPage({
             ))}
         <SceneTitle kicker="01 · Earth · today" title="Off-grid clinic" style={stacked ? styles.titleStacked : styles.title} />
         {stacked ? null : (
-          <KitReadout live={source === "serial"} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
+          <KitReadout live={fresh.live} mark={fresh.mark} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
         )}
       </View>
       {stacked ? (
@@ -103,7 +106,7 @@ export function EarthPage({
               <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
             ))}
           </Legend>
-          <KitReadout inline live={source === "serial"} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
+          <KitReadout inline live={fresh.live} mark={fresh.mark} dark={reading.dark} hum={reading.hum} temp={reading.temp} muted={reading.muted} note={HINT} />
         </>
       ) : null}
 

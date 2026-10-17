@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
-import type { KitReading, KitSource } from "../kit/types";
+import { kitFreshness, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { mono, PlanetFill, sans, stormLabel } from "./dashboard";
@@ -45,11 +45,13 @@ const glideStyle = (Platform.OS === "web"
 export function AllWorlds({
   reading,
   source,
+  link,
   marsDelay: _marsDelay,
   onOpen,
 }: {
   reading: KitReading;
   source: KitSource;
+  link?: LinkStatus;
   marsDelay: string;
   onOpen: (world: Id) => void;
 }) {
@@ -61,7 +63,7 @@ export function AllWorlds({
   const guess = Math.max(280, Math.min(width, 1520) - (compact ? 28 : 44));
   const stage = stageFor(measured || guess, narrow);
   const systemsOn = reading.leds.filter((value) => value > 0).length;
-  const live = source === "serial";
+  const fresh = kitFreshness(source, link);
 
   useEffect(() => {
     if (measured <= 0) return;
@@ -100,7 +102,7 @@ export function AllWorlds({
             hot={hot === id}
             glide={glide}
             narrow={narrow}
-            onHot={() => setHot(id)}
+            onHot={() => setHot((current) => (current === id ? current : id))}
             onCold={() => setHot((current) => (current === id ? null : current))}
             onChoose={() => {
               if (id === selected) onOpen(id);
@@ -119,7 +121,9 @@ export function AllWorlds({
 
       <View style={[styles.footer, compact ? { flexDirection: "column" } : null]}>
         <Text style={styles.footTxt}>
-          <Text style={{ color: live ? colors.ok : colors.gold }}>{live ? "Live kit" : "Simulated kit"}</Text>
+          <Text style={{ color: fresh.live ? colors.ok : fresh.mark === "Stale" ? colors.watch : colors.gold }}>
+            {fresh.mark === "Live" ? "Arduino live" : fresh.mark === "Stale" ? "Stale reading" : fresh.mark === "Connecting" ? "Connecting" : "Simulated kit"}
+          </Text>
           {`   Light sensor ${Math.round(reading.dark)}% dark    Humidity ${Math.round(reading.hum)}%    Temp ${reading.temp.toFixed(1)} °C    Systems on ${systemsOn} of 4`}
         </Text>
         <Text style={styles.footTxt}>Planet textures: Solar System Scope, CC BY 4.0, based on NASA imagery</Text>
@@ -160,7 +164,7 @@ function Planet({
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.anchor, motion, { transform: [{ translateX: x }, { translateY: stage.cy }], zIndex: selected ? 3 : hot ? 2 : 1 }]}
+      style={[styles.anchor, motion, { transform: [{ translateX: x }, { translateY: stage.cy }], zIndex: selected ? 2 : 1 }]}
     >
       <View pointerEvents="none" style={[styles.halo, motion, { width: size, height: size, left: -size / 2, top: -size / 2 }]}>
         {id === "earth" ? <View style={styles.glow} /> : <Orbit mars={id === "mars"} />}
@@ -171,8 +175,6 @@ function Planet({
         accessibilityRole="button"
         onHoverIn={onHot}
         onHoverOut={onCold}
-        onFocus={onHot}
-        onBlur={onCold}
         onPress={onChoose}
         style={[
           styles.planet,
