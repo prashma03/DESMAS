@@ -1,76 +1,51 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useScreen } from "../layout";
-import Svg, { Path } from "react-native-svg";
-
-const SignalPath = Animated.createAnimatedComponent(Path);
-
-const WIDE = {
-  moon: "M175 138 Q335 52 500 122",
-  mars: "M175 138 Q500 6 830 126",
-};
-const NARROW = {
-  moon: "M210 78 Q500 18 790 78",
-  mars: "M230 96 Q500 40 500 230",
-};
-
-function useDash(duration: number, distance: number) {
-  const offset = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.timing(offset, {
-        toValue: -distance,
-        duration,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [distance, duration, offset]);
-  return offset;
-}
+import { useEffect, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 import type { KitReading, KitSource } from "../kit/types";
+import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { mono, PlanetFill, sans, stormLabel } from "./dashboard";
 
 type Id = "earth" | "moon" | "mars";
+type Slot = "left" | "center" | "right";
 
 const ORDER: Id[] = ["earth", "moon", "mars"];
 
-function layout(hover: Id | null, width: number) {
-  const narrow = width < 640;
-  const content = Math.max(280, width - (narrow ? 28 : 48));
-  const globe = narrow
-    ? Math.max(92, Math.min(140, content * 0.32))
-    : Math.max(112, Math.min(230, (width - 96) / 3.8));
-  const focus = Math.min(narrow ? 220 : 390, Math.max(globe * 1.45, content * (narrow ? 0.58 : 0.34)));
-  const small = narrow ? Math.max(64, content * 0.18) : 120;
-  const home = narrow
-    ? {
-        earth: { left: 28, top: 30, size: globe },
-        moon: { left: 72, top: 30, size: globe },
-        mars: { left: 50, top: 68, size: globe },
-      }
-    : {
-        earth: { left: 20, top: 48, size: globe },
-        moon: { left: 50, top: 46, size: globe * 1.08 },
-        mars: { left: 80, top: 48, size: globe },
-      };
-  if (!hover) return home;
-  const others = ORDER.filter((id) => id !== hover);
-  return {
-    ...home,
-    [hover]: { left: 50, top: narrow ? 32 : 42, size: focus },
-    [others[0]]: { left: narrow ? 20 : 12, top: narrow ? 80 : 76, size: small },
-    [others[1]]: { left: narrow ? 80 : 88, top: narrow ? 80 : 76, size: small },
-  };
+function slotOf(selected: Id, id: Id): Slot {
+  if (id === selected) return "center";
+  if (selected === "earth") return id === "moon" ? "left" : "right";
+  if (selected === "mars") return id === "earth" ? "left" : "right";
+  return id === "earth" ? "left" : "right";
 }
+
+function stageFor(stageW: number, narrow: boolean) {
+  const w = Math.max(280, stageW);
+  let focus = narrow ? Math.min(210, w * 0.46) : Math.min(520, Math.max(360, w * 0.36));
+  let small = narrow ? Math.max(64, Math.min(96, w * 0.16)) : Math.min(168, Math.max(140, w * 0.12));
+  const centerX = w / 2;
+  let leftX = Math.max(small / 2 + 12, w * (narrow ? 0.16 : 0.13));
+  const gap = () => centerX - focus / 2 - (leftX + small / 2);
+  while (gap() < 36 && focus > small + 48) focus -= 6;
+  while (gap() < 24 && small > 64) {
+    small -= 4;
+    leftX = Math.max(small / 2 + 8, leftX);
+  }
+  const cy = focus / 2 + (narrow ? 8 : 18);
+  const h = cy + focus / 2 + (narrow ? 96 : 116);
+  return { w, h, focus, small, cy, leftX, rightX: w - leftX, centerX };
+}
+
+const glideStyle = (Platform.OS === "web"
+  ? { transitionProperty: "transform", transitionDuration: "780ms", transitionTimingFunction: "cubic-bezier(0.45, 0, 0.2, 1)" }
+  : {}) as ViewStyle;
+
+const hoverStyle = (Platform.OS === "web"
+  ? { transitionProperty: "transform, box-shadow", transitionDuration: "160ms", transitionTimingFunction: "ease-out" }
+  : {}) as ViewStyle;
 
 export function AllWorlds({
   reading,
   source,
-  marsDelay,
+  marsDelay: _marsDelay,
   onOpen,
 }: {
   reading: KitReading;
@@ -79,29 +54,28 @@ export function AllWorlds({
   onOpen: (world: Id) => void;
 }) {
   const { width, compact, narrow } = useScreen();
-  const [hover, setHover] = useState<Id | null>(null);
-  const anim = useRef({
-    earth: { left: new Animated.Value(22), top: new Animated.Value(46), size: new Animated.Value(200) },
-    moon: { left: new Animated.Value(50), top: new Animated.Value(44), size: new Animated.Value(220) },
-    mars: { left: new Animated.Value(78), top: new Animated.Value(46), size: new Animated.Value(200) },
-  }).current;
-
-  useEffect(() => {
-    const next = layout(hover, width);
-    Animated.parallel(
-      ORDER.flatMap((id) => [
-        Animated.timing(anim[id].left, { toValue: next[id].left, duration: 560, useNativeDriver: false }),
-        Animated.timing(anim[id].top, { toValue: next[id].top, duration: 560, useNativeDriver: false }),
-        Animated.timing(anim[id].size, { toValue: next[id].size, duration: 560, useNativeDriver: false }),
-      ]),
-    ).start();
-  }, [anim, hover, width]);
-
-  const onCount = reading.leds.filter((v) => v > 0).length;
+  const [selected, setSelected] = useState<Id>("moon");
+  const [hot, setHot] = useState<Id | null>(null);
+  const [measured, setMeasured] = useState(0);
+  const [glide, setGlide] = useState(false);
+  const guess = Math.max(280, Math.min(width, 1520) - (compact ? 28 : 44));
+  const stage = stageFor(measured || guess, narrow);
+  const onCount = reading.leds.filter((value) => value > 0).length;
   const live = source === "serial";
 
+  useEffect(() => {
+    if (measured <= 0) return;
+    const id = requestAnimationFrame(() => setGlide(true));
+    return () => cancelAnimationFrame(id);
+  }, [measured]);
+
+  const onStage = (event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.width);
+    setMeasured((current) => (Math.abs(current - next) < 2 ? current : next));
+  };
+
   return (
-    <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
       <View style={styles.intro}>
         <Pressable style={styles.live} onPress={() => onOpen("moon")}>
           <Text style={styles.liveMark}>LIVE</Text>
@@ -114,27 +88,33 @@ export function AllWorlds({
         </Text>
       </View>
 
-      <View
-        style={[styles.theater, { height: narrow ? 520 : 460 }]}
-        {...({ onMouseLeave: () => setHover(null) } as object)}
-      >
-        {hover ? null : <SignalLinks narrow={narrow} marsDelay={marsDelay} />}
+      <View style={[styles.theater, { height: stage.h }]} onLayout={onStage}>
         {ORDER.map((id) => (
-          <GlobeSlot
+          <Planet
             key={id}
             id={id}
             reading={reading}
-            motion={anim[id]}
-            hover={hover}
+            stage={stage}
+            slot={slotOf(selected, id)}
+            selected={selected === id}
+            hot={hot === id}
+            glide={glide}
             narrow={narrow}
-            onHover={() => setHover(id)}
-            onOpen={() => onOpen(id)}
+            onHot={() => setHot(id)}
+            onCold={() => setHot((current) => (current === id ? null : current))}
+            onChoose={() => {
+              if (id === selected) onOpen(id);
+              else {
+                setHot(null);
+                setSelected(id);
+              }
+            }}
           />
         ))}
       </View>
 
       <Text style={[styles.hint, narrow ? { letterSpacing: 0.4 } : null]}>
-        {narrow ? "Tap a world to open it" : hover ? "Click to open" : "Hover a world to bring it forward · click to open"}
+        {narrow ? "Tap a small world to switch · tap the big one to open it" : "Click the big globe to open it · click a small one to switch"}
       </Text>
 
       <View style={[styles.footer, compact ? { flexDirection: "column" } : null]}>
@@ -148,115 +128,100 @@ export function AllWorlds({
   );
 }
 
-function SignalLinks({ narrow, marsDelay }: { narrow: boolean; marsDelay: string }) {
-  const dots = useDash(1600, 16);
-  const moon = useDash(1300, 380);
-  const mars = useDash(7000, 760);
-  const paths = narrow ? NARROW : WIDE;
-  const moonReturn = Animated.add(moon, -190);
-  const marsLabel = /min|s$/i.test(marsDelay) && !/3 to 22/i.test(marsDelay) ? marsDelay : "3 TO 22 MIN";
-  return (
-    <View style={[styles.arcs, narrow ? styles.arcsNarrow : null]} pointerEvents="none">
-      <Svg width="100%" height="100%" viewBox={narrow ? "0 0 1000 280" : "0 0 1000 150"} preserveAspectRatio="none">
-        <SignalPath d={paths.moon} stroke="rgba(158,208,255,0.5)" strokeWidth={1.4} fill="none" strokeDasharray="2 7" strokeDashoffset={dots} />
-        <SignalPath d={paths.mars} stroke="rgba(255,163,107,0.45)" strokeWidth={1.4} fill="none" strokeDasharray="2 7" strokeDashoffset={dots} />
-        <SignalPath d={paths.moon} stroke="#E7F3FF" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="11 900" strokeDashoffset={moon} />
-        <SignalPath d={paths.moon} stroke="#F7C873" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="11 900" strokeDashoffset={moonReturn} />
-        <SignalPath d={paths.mars} stroke="#FFC59E" strokeWidth={3.2} fill="none" strokeLinecap="round" strokeDasharray="12 1100" strokeDashoffset={mars} />
-      </Svg>
-      <Text style={[styles.arcLabel, narrow ? styles.moonLabelNarrow : styles.moonLabel]}>EARTH ↔ MOON · 1.3 S</Text>
-      <Text style={[styles.arcLabel, narrow ? styles.marsLabelNarrow : styles.marsLabel]}>{`EARTH ↔ MARS · ${marsLabel.toUpperCase()}`}</Text>
-    </View>
-  );
-}
-
-function GlobeSlot({
+function Planet({
   id,
   reading,
-  motion,
-  hover,
+  stage,
+  slot,
+  selected,
+  hot,
+  glide,
   narrow,
-  onHover,
-  onOpen,
+  onHot,
+  onCold,
+  onChoose,
 }: {
   id: Id;
   reading: KitReading;
-  motion: { left: Animated.Value; top: Animated.Value; size: Animated.Value };
-  hover: Id | null;
+  stage: ReturnType<typeof stageFor>;
+  slot: Slot;
+  selected: boolean;
+  hot: boolean;
+  glide: boolean;
   narrow: boolean;
-  onHover: () => void;
-  onOpen: () => void;
+  onHot: () => void;
+  onCold: () => void;
+  onChoose: () => void;
 }) {
   const meta = caption(id, reading);
-  const focused = hover === id;
-  const dim = hover !== null && !focused;
+  const size = slot === "center" ? stage.focus : stage.small;
+  const x = slot === "center" ? stage.centerX : slot === "left" ? stage.leftX : stage.rightX;
+  const scale = size / stage.focus;
+  const motion = glide ? glideStyle : undefined;
   return (
-    <Animated.View
-      style={{
-        position: "absolute",
-        left: motion.left.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }),
-        top: motion.top.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }),
-        width: motion.size,
-        marginLeft: Animated.multiply(motion.size, -0.5),
-        marginTop: Animated.multiply(motion.size, -0.5),
-        alignItems: "center",
-        zIndex: focused ? 3 : 1,
-      }}
-    >
-      {id === "earth" ? (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            width: Animated.add(motion.size, 22),
-            height: Animated.add(motion.size, 22),
-            borderRadius: 999,
-            backgroundColor: "rgba(80,150,255,0.18)",
-            top: -11,
-            left: -11,
-          }}
-        />
-      ) : (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            width: Animated.multiply(motion.size, 1.36),
-            height: Animated.multiply(motion.size, 0.28),
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.16)",
-            top: Animated.multiply(motion.size, 0.36),
-            left: Animated.multiply(motion.size, -0.18),
-          }}
-        />
-      )}
-      <Pressable accessibilityLabel={`Open ${meta.name}`} onHoverIn={onHover} onFocus={onHover} onPress={onOpen}>
-        <Animated.View
-          style={{
-            width: motion.size,
-            height: motion.size,
-            borderRadius: Animated.divide(motion.size, 2),
-            overflow: "hidden",
-            backgroundColor: "#000",
-          }}
-        >
-          <PlanetFill kind={id} />
-        </Animated.View>
+    <>
+      <Pressable
+        accessibilityLabel={selected ? `Open ${meta.name}` : `Select ${meta.name}`}
+        accessibilityRole="button"
+        onHoverIn={onHot}
+        onHoverOut={onCold}
+        onFocus={onHot}
+        onBlur={onCold}
+        onPress={onChoose}
+        style={[
+          styles.planet,
+          motion,
+          {
+            width: stage.focus,
+            height: stage.focus,
+            marginLeft: -stage.focus / 2,
+            marginTop: -stage.focus / 2,
+            zIndex: selected ? 3 : hot ? 2 : 1,
+            transform: [{ translateX: x }, { translateY: stage.cy }, { scale }],
+            ...(Platform.OS === "web" ? { cursor: "pointer", transformOrigin: "center" } : null),
+          } as ViewStyle,
+        ]}
+      >
+        <View pointerEvents="none" style={[styles.skin, hoverStyle, { transform: [{ scale: hot ? 1.045 : 1 }] }]}>
+          {id === "earth" ? <View style={styles.glow} /> : <Orbit mars={id === "mars"} />}
+          <View style={[styles.disc, hot ? styles.discHot : null]}>
+            <PlanetFill kind={id} />
+          </View>
+        </View>
       </Pressable>
-      <View style={{ alignItems: "center", marginTop: 14, width: "100%", maxWidth: "100%", opacity: dim ? 0.85 : 1 }}>
-        <Text numberOfLines={1} style={[styles.kicker, { width: "100%", textAlign: "center" }, narrow ? { letterSpacing: 0.2 } : null]}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.label,
+          motion,
+          { zIndex: 4, transform: [{ translateX: x }, { translateY: stage.cy + size / 2 + (selected ? 16 : 12) }] },
+        ]}
+      >
+        <Text numberOfLines={1} style={[styles.kicker, narrow ? { letterSpacing: 0.2 } : null]}>
           {narrow ? (id === "earth" ? "Today" : id === "moon" ? "Live" : "Next") : meta.kicker}
         </Text>
-        <Text numberOfLines={1} style={[styles.name, { width: "100%", textAlign: "center" }, focused ? { fontSize: narrow ? 22 : 30 } : null]}>{meta.name}</Text>
-        {dim || (narrow && !focused) ? null : (
-          <View style={[styles.statusRow, { maxWidth: "100%", justifyContent: "center" }]}>
+        <Text numberOfLines={1} style={[styles.name, selected ? { fontSize: narrow ? 24 : 32 } : null]}>
+          {meta.name}
+        </Text>
+        {selected ? (
+          <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: meta.color }]} />
-            <Text numberOfLines={2} style={[styles.status, { color: meta.color, textAlign: "center", flexShrink: 1 }]}>{meta.status}</Text>
+            <Text numberOfLines={2} style={[styles.status, { color: meta.color }]}>
+              {meta.status}
+            </Text>
           </View>
-        )}
+        ) : null}
       </View>
-    </Animated.View>
+    </>
+  );
+}
+
+function Orbit({ mars }: { mars: boolean }) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={styles.ring} />
+      <View style={[styles.particle, { backgroundColor: mars ? "#FFC59E" : "#F4F7FB" }]} />
+    </View>
   );
 }
 
@@ -279,11 +244,11 @@ function caption(id: Id, reading: KitReading) {
     };
   }
   if (id === "moon") {
-    const on = reading.leds.filter((v) => v > 0).length;
+    const on = reading.leds.filter((value) => value > 0).length;
     return {
       name: "Moon",
       kicker: "02 · Live hardware",
-      status: alarm ? `Humidity ${Math.round(reading.hum)}%` : night ? `Night · ${on} of 4 on` : "Lunar day · all on",
+      status: alarm ? `Humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${on} of 4 on` : "Lunar day · all on",
       color: alarm ? colors.alert : night ? colors.watch : colors.ok,
     };
   }
@@ -297,7 +262,8 @@ function caption(id: Id, reading: KitReading) {
 }
 
 const styles = StyleSheet.create({
-  page: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18, width: "100%", maxWidth: 1240, alignSelf: "center" },
+  scroll: { flex: 1, minHeight: 0 },
+  page: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18, width: "100%", maxWidth: 1520, alignSelf: "center" },
   pageCompact: { paddingHorizontal: 14, paddingTop: 16 },
   intro: { alignItems: "center", gap: 12, width: "100%" },
   live: {
@@ -329,15 +295,41 @@ const styles = StyleSheet.create({
   liveTxt: { color: colors.ink, fontFamily: sans, fontSize: 14, flexShrink: 1, textAlign: "center" },
   h1: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 44, letterSpacing: -1, textAlign: "center", width: "100%" },
   sub: { color: colors.muted, fontFamily: sans, fontSize: 17, lineHeight: 24, textAlign: "center", width: "100%", maxWidth: 640 },
-  theater: { height: 430, marginTop: 4 },
-  arcs: { position: "absolute", left: 0, right: 0, top: 0, height: 150, zIndex: 0 },
-  arcsNarrow: { height: 280 },
-  arcLabel: { position: "absolute", fontFamily: mono, fontSize: 11, letterSpacing: 1.4 },
-  moonLabel: { left: "24%", top: 58, color: "#9ED0FF" },
-  marsLabel: { left: 0, right: 0, top: 4, textAlign: "center", color: "#FFC59E" },
-  moonLabelNarrow: { left: "28%", top: 28, color: "#9ED0FF" },
-  marsLabelNarrow: { left: "8%", top: 118, color: "#FFC59E" },
-  hint: { textAlign: "center", color: colors.dim, fontFamily: mono, fontSize: 12, letterSpacing: 1.4, marginTop: 8 },
+  theater: { marginTop: 8, width: "100%", overflow: "visible" },
+  planet: { position: "absolute", left: 0, top: 0 },
+  skin: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  disc: { width: "100%", height: "100%", borderRadius: 999, overflow: "hidden", backgroundColor: "#000" },
+  discHot: Platform.OS === "web" ? { boxShadow: "0 0 0 2px rgba(255,255,255,0.42), 0 0 28px rgba(180,210,255,0.35)" } : {},
+  glow: {
+    position: "absolute",
+    left: "-3%",
+    top: "-3%",
+    width: "106%",
+    height: "106%",
+    borderRadius: 999,
+    backgroundColor: "rgba(80,150,255,0.2)",
+  },
+  ring: {
+    position: "absolute",
+    left: "-18%",
+    top: "38%",
+    width: "136%",
+    height: "24%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  particle: {
+    position: "absolute",
+    top: "46%",
+    right: "-4%",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    boxShadow: "0 0 8px rgba(255,255,255,0.85)",
+  },
+  label: { position: "absolute", left: -130, top: 0, width: 260, alignItems: "center" },
+  hint: { textAlign: "center", color: colors.dim, fontFamily: mono, fontSize: 12, letterSpacing: 1.4, marginTop: 8, textTransform: "uppercase" },
   footer: {
     marginTop: 22,
     paddingTop: 14,
@@ -350,9 +342,9 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   footTxt: { color: colors.dim, fontFamily: mono, fontSize: 12, flexGrow: 1, flexShrink: 1, flexBasis: 240, maxWidth: "100%" },
-  kicker: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase" },
-  name: { color: colors.ink, fontFamily: sans, fontSize: 22, marginTop: 2 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  kicker: { color: colors.dim, fontFamily: mono, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", textAlign: "center" },
+  name: { color: colors.ink, fontFamily: sans, fontSize: 20, marginTop: 2, textAlign: "center" },
+  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, maxWidth: 260 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  status: { fontFamily: mono, fontSize: 12 },
+  status: { fontFamily: mono, fontSize: 12, textAlign: "center", flexShrink: 1 },
 });

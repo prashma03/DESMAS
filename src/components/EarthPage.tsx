@@ -40,7 +40,7 @@ export function EarthPage({
   source: KitSource;
 }) {
   const { narrow, width } = useScreen();
-  const stacked = narrow || width < 980;
+  const stacked = narrow || width < 1100;
   const battery = batteryEstimate("earth", reading.dark);
   const dark = Math.round(reading.dark);
   const night = dark >= 55;
