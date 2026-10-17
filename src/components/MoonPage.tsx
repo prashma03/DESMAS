@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useRef } from "react";
+import { Animated, Image, StyleSheet, Text, View } from "react-native";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -21,7 +21,6 @@ import {
   solarOf,
   Split,
   StatRow,
-  systemLine,
 } from "./dashboard";
 
 const SYSTEMS = [
@@ -50,30 +49,37 @@ export function MoonPage({
   const night = reading.dark >= 55;
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
+  const pulse = useRef(new Animated.Value(0.25)).current;
+  useEffect(() => {
+    if (!reading.alarm) {
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.9, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.2, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reading.alarm, pulse]);
+  const comms =
+    reading.leds[1] === 2 ? "Comms — LOW POWER" : on(1) ? "Comms — ON" : "Comms — OFF";
   const tags = [
-    { title: "Comms tower", line: systemLine(reading.leds[1], "ON · link to Earth", "OFF · link to Earth"), color: colors.ledBlue, on: on(1), style: { left: "42%" as const, top: "18%" as const } },
-    { title: "Science lab", line: on(2) ? "ON" : "OFF", color: colors.ledYellow, on: on(2), style: { left: "18%" as const, top: "42%" as const } },
-    { title: "Hab A · life support", line: on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF", color: colors.green, on: on(0), style: { left: "40%" as const, top: "36%" as const } },
-    { title: "Comfort module", line: on(3) ? "ON" : "OFF", color: colors.ledRed, on: on(3), style: { right: "28%" as const, top: "48%" as const } },
-    { title: "Solar arrays", line: `Charging · ${solar}%`, color: colors.gold, on: true, style: { right: "8%" as const, top: "22%" as const } },
+    { title: "Communications Tower", line: comms, color: colors.ledBlue, on: on(1), style: { left: "46%" as const, top: "30%" as const } },
+    { title: "Science Lab", line: on(2) ? "Science — ON" : "Science — OFF", color: colors.ledYellow, on: on(2), style: { left: "12%" as const, top: "46%" as const } },
+    { title: "Hab A", line: on(0) ? "Life Support — ON" : "Life Support — OFF", color: colors.green, on: on(0), style: { left: "38%" as const, top: "40%" as const } },
+    { title: "Comfort Module", line: on(3) ? "Comfort — ON" : "Comfort — OFF", color: colors.ledRed, on: on(3), style: { left: "58%" as const, top: "62%" as const } },
+    { title: "Solar Arrays", line: solar >= 15 ? "Charging" : "Idle", color: colors.gold, on: solar >= 15, style: { right: "6%" as const, top: "34%" as const } },
   ];
 
   return (
     <Page>
-      <View style={[styles.scene, narrow ? { height: 320 } : null]}>
-        <LinearGradient colors={["#070b16", "#121826", "#2a2e36", "#1a1c22"]} style={StyleSheet.absoluteFill} />
-        <View style={styles.ground} />
-        <View style={styles.crater} />
-        <View style={styles.craterSm} />
-        <View style={styles.earth}>
-          <View style={styles.earthDot} />
-        </View>
-        <View style={[styles.hab, narrow ? { left: "18%", width: "34%" } : { left: "22%", width: 150 }]} />
-        <View style={[styles.hab, narrow ? { left: "40%", width: "28%", bottom: "38%" } : { left: "38%", width: 120, bottom: "38%" }]} />
-        <View style={styles.dome} />
-        <View style={styles.dish} />
-        <View style={styles.array} />
-        <View style={[styles.veil, { opacity: Math.min(0.55, reading.dark / 160) }]} />
+      <View style={styles.scene}>
+        <Image source={require("../../assets/moon/artemis-base.jpg")} style={styles.photo} resizeMode="cover" accessibilityLabel="Artemis lunar research base at the Moon's south pole" />
+        <View pointerEvents="none" style={[styles.veil, { opacity: Math.min(0.78, reading.dark / 128) }]} />
+        {reading.alarm ? <Animated.View pointerEvents="none" style={[styles.alarm, { opacity: pulse }]} /> : null}
         <DayBadge
           label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${onCount} of 4 on` : "Lunar day · all systems on"}
           tone={reading.alarm ? "alert" : night ? "watch" : "ok"}
@@ -169,17 +175,20 @@ export function MoonPage({
 
 const styles = StyleSheet.create({
   slot: { flexGrow: 1, flexShrink: 1, flexBasis: 260, minWidth: 0, maxWidth: "100%" },
-  scene: { height: 460, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
-  ground: { position: "absolute", left: "-10%", right: "-10%", bottom: -30, height: "42%", borderTopLeftRadius: 220, borderTopRightRadius: 220, backgroundColor: "#3a3e46" },
-  crater: { position: "absolute", left: "8%", bottom: "18%", width: 90, height: 36, borderRadius: 40, backgroundColor: "#2c3038" },
-  craterSm: { position: "absolute", left: "60%", bottom: "14%", width: 50, height: 20, borderRadius: 20, backgroundColor: "#32363e" },
-  earth: { position: "absolute", left: "16%", top: 54 },
-  earthDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#3d7edb", borderWidth: 3, borderColor: "rgba(120,170,255,0.35)" },
-  hab: { position: "absolute", bottom: "32%", height: 48, borderRadius: 24, backgroundColor: "#f4f1ea" },
-  dome: { position: "absolute", left: "52%", bottom: "28%", width: 70, height: 48, borderTopLeftRadius: 40, borderTopRightRadius: 40, backgroundColor: "#efeae2" },
-  dish: { position: "absolute", left: "48%", bottom: "46%", width: 22, height: 22, borderRadius: 11, borderWidth: 3, borderColor: "#ddd", backgroundColor: "transparent" },
-  array: { position: "absolute", right: "10%", bottom: "36%", width: 90, height: 54, backgroundColor: "#16325c", borderWidth: 2, borderColor: "#9bb", transform: [{ rotate: "-18deg" }] },
-  veil: { ...StyleSheet.absoluteFillObject, backgroundColor: "#05060c" },
+  scene: { width: "100%", aspectRatio: 16 / 9, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#000" },
+  photo: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  veil: { ...StyleSheet.absoluteFillObject, backgroundColor: "#020308" },
+  alarm: {
+    position: "absolute",
+    left: "36%",
+    top: "48%",
+    width: "20%",
+    height: "16%",
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.alert,
+    backgroundColor: "rgba(248,113,113,0.1)",
+  },
   linkPill: {
     position: "absolute",
     top: 16,

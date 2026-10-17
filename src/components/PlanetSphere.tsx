@@ -101,8 +101,10 @@ async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: 
   scene.add(tilt);
 
   const geometry = new THREE.SphereGeometry(1, 64, 64);
-  const surface = new THREE.MeshStandardMaterial({ color: 0x8ec8ef, roughness: 0.86, metalness: 0 });
-  spin.add(new THREE.Mesh(geometry, surface));
+  const surface = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.86, metalness: 0 });
+  const surfaceMesh = new THREE.Mesh(geometry, surface);
+  surfaceMesh.visible = false;
+  spin.add(surfaceMesh);
 
   const glow = new THREE.Color(motion.glow);
   const atmosphere = new THREE.Mesh(
@@ -168,6 +170,7 @@ async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: 
     surface.map = map;
     surface.color.set(0xffffff);
     surface.needsUpdate = true;
+    surfaceMesh.visible = true;
     if (kind === "earth") {
       const cloudMap = await loadMap(CLOUDS);
       if (life.alive) {
@@ -181,6 +184,7 @@ async function mountPlanet(gl: ExpoWebGLRenderingContext, kind: WorldKey, life: 
     }
   } catch {
     surface.color.set(kind === "mars" ? 0xc4512a : kind === "moon" ? 0xb7b7b7 : 0x2f6fbe);
+    surfaceMesh.visible = true;
   }
 }
 
@@ -189,6 +193,7 @@ export function PlanetSphere({ kind }: { kind: WorldKey }) {
 
   useEffect(() => {
     const token = life.current;
+    token.alive = true;
     return () => {
       token.alive = false;
     };
