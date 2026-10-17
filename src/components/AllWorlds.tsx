@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { kitFreshness, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -18,8 +19,26 @@ function slotOf(selected: Id, id: Id): Slot {
   return id === "earth" ? "left" : "right";
 }
 
-function stageFor(stageW: number, narrow: boolean) {
+type Stage = {
+  w: number;
+  h: number;
+  focus: number;
+  small: number;
+  cy: number;
+  leftX: number;
+  rightX: number;
+  centerX: number;
+};
+
+function stageFor(stageW: number, narrow: boolean, focused: boolean): Stage {
   const w = Math.max(280, stageW);
+  if (!focused) {
+    const small = narrow ? Math.min(108, Math.max(84, w * 0.22)) : Math.min(188, Math.max(150, w * 0.145));
+    const step = small + (narrow ? 36 : 72);
+    const cy = Math.max(small / 2 + 36, step * 0.78);
+    const h = cy + small / 2 + (narrow ? 96 : 118);
+    return { w, h, focus: small, small, cy, leftX: w / 2 - step, rightX: w / 2 + step, centerX: w / 2 };
+  }
   let focus = narrow ? Math.min(220, w * 0.48) : Math.min(520, Math.max(420, w * 0.38));
   let small = narrow ? Math.max(72, Math.min(104, w * 0.18)) : Math.min(168, Math.max(140, w * 0.12));
   const centerX = w / 2;
@@ -35,6 +54,59 @@ function stageFor(stageW: number, narrow: boolean) {
   return { w, h, focus, small, cy, leftX, rightX: w - leftX, centerX };
 }
 
+const GLIDE_MS = 780;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+function quadLength(x0: number, y0: number, cx: number, cy: number, x1: number, y1: number) {
+  let length = 0;
+  let px = x0;
+  let py = y0;
+  for (let i = 1; i <= 32; i += 1) {
+    const t = i / 32;
+    const u = 1 - t;
+    const x = u * u * x0 + 2 * u * t * cx + t * t * x1;
+    const y = u * u * y0 + 2 * u * t * cy + t * t * y1;
+    length += Math.hypot(x - px, y - py);
+    px = x;
+    py = y;
+  }
+  return length;
+}
+
+function rim(x1: number, y1: number, r1: number, x2: number, y2: number, r2: number) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const span = Math.hypot(dx, dy) || 1;
+  const ux = dx / span;
+  const uy = dy / span;
+  return { x1: x1 + ux * r1, y1: y1 + uy * r1, x2: x2 - ux * r2, y2: y2 - uy * r2 };
+}
+
+function useReducedMotion() {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+      setReduce(query.matches);
+      const onChange = () => setReduce(query.matches);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    }
+    let cancel = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (!cancel) setReduce(value);
+      })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduce);
+    return () => {
+      cancel = true;
+      sub.remove();
+    };
+  }, []);
+  return reduce;
+}
+
 const glideStyle = (Platform.OS === "web"
   ? {
       transitionProperty: "transform, width, height, left, top, opacity",
@@ -47,7 +119,7 @@ export function AllWorlds({
   reading,
   source,
   link,
-  marsDelay: _marsDelay,
+  marsDelay,
   onOpen,
 }: {
   reading: KitReading;
@@ -57,12 +129,20 @@ export function AllWorlds({
   onOpen: (world: Id) => void;
 }) {
   const { width, compact, narrow } = useScreen();
-  const [selected, setSelected] = useState<Id>("moon");
-  const [hot, setHot] = useState<Id | null>(null);
+  const selected = null as Id | null;
+  const [hovered, setHovered] = useState<Id | null>(null);
   const [measured, setMeasured] = useState(0);
   const [glide, setGlide] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const hits = useRef<Partial<Record<Id, HTMLElement>>>({});
+  const point = useRef<{ x: number; y: number } | null>(null);
+  const intent = useRef(false);
+  const hoverRef = useRef<Id | null>(null);
+  const lockUntil = useRef(0);
+  const movedDuringLock = useRef(false);
   const guess = Math.max(280, Math.min(width, 1520) - (compact ? 28 : 44));
-  const stage = stageFor(measured || guess, narrow);
+  const focus = hovered ?? selected;
+  const stage = stageFor(measured || guess, narrow, focus !== null);
   const systemsOn = reading.leds.filter((value) => value > 0).length;
   const fresh = kitFreshness(source, link);
 
@@ -71,6 +151,49 @@ export function AllWorlds({
     const id = requestAnimationFrame(() => setGlide(true));
     return () => cancelAnimationFrame(id);
   }, [measured]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const hitAt = (x: number, y: number): Id | null => {
+      let found: Id | null = null;
+      for (const id of ORDER) {
+        const node = hits.current[id];
+        if (!node?.getBoundingClientRect) continue;
+        const rect = node.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const radius = rect.width / 2;
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= radius * radius) found = id;
+      }
+      return found;
+    };
+    const commit = (next: Id | null) => {
+      if (hoverRef.current === next) return;
+      hoverRef.current = next;
+      setHovered(next);
+      const until = Date.now() + GLIDE_MS;
+      lockUntil.current = until;
+      movedDuringLock.current = false;
+      window.setTimeout(() => {
+        if (lockUntil.current !== until || !movedDuringLock.current || !point.current) return;
+        commit(hitAt(point.current.x, point.current.y));
+      }, GLIDE_MS + 20);
+    };
+    const onMove = (event: PointerEvent) => {
+      const prev = point.current;
+      point.current = { x: event.clientX, y: event.clientY };
+      if (!prev) return;
+      if (Math.hypot(event.clientX - prev.x, event.clientY - prev.y) < 3) return;
+      intent.current = true;
+      if (Date.now() < lockUntil.current) {
+        movedDuringLock.current = true;
+        return;
+      }
+      commit(hitAt(event.clientX, event.clientY));
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
 
   const onStage = (event: LayoutChangeEvent) => {
     const next = Math.round(event.nativeEvent.layout.width);
@@ -94,32 +217,29 @@ export function AllWorlds({
       </View>
 
       <View style={[styles.theater, { height: stage.h }]} onLayout={onStage}>
+        <SignalArcs stage={stage} focus={focus} marsDelay={marsDelay} reduce={reduceMotion} />
         {ORDER.map((id) => (
           <Planet
             key={id}
             id={id}
             reading={reading}
             stage={stage}
-            slot={slotOf(selected, id)}
-            selected={selected === id}
-            hot={hot === id}
+            slot={focus ? slotOf(focus, id) : id === "earth" ? "left" : id === "mars" ? "right" : "center"}
+            focused={focus === id}
+            equal={focus === null}
             glide={glide}
             narrow={narrow}
-            onHot={() => setHot((current) => (current === id ? current : id))}
-            onCold={() => setHot((current) => (current === id ? null : current))}
-            onChoose={() => {
-              if (id === selected) onOpen(id);
-              else {
-                setHot(null);
-                setSelected(id);
-              }
+            onHit={(node) => {
+              if (node) hits.current[id] = node;
+              else delete hits.current[id];
             }}
+            onChoose={() => onOpen(id)}
           />
         ))}
       </View>
 
       <Text style={[styles.hint, narrow ? { letterSpacing: 0.4 } : null]}>
-        {narrow ? "Tap a small world to switch · tap the big one to open it" : "Click the big globe to open it · click a small one to switch"}
+        {narrow ? "Tap a world to open it" : focus ? "Click to open · move away to line them up" : "Hover a world to bring it forward · click to open"}
       </Text>
 
       <View style={[styles.footer, compact ? { flexDirection: "column" } : null]}>
@@ -141,44 +261,41 @@ function Planet({
   reading,
   stage,
   slot,
-  selected,
-  hot,
+  focused,
+  equal,
   glide,
   narrow,
-  onHot,
-  onCold,
+  onHit,
   onChoose,
 }: {
   id: Id;
   reading: KitReading;
-  stage: ReturnType<typeof stageFor>;
+  stage: Stage;
   slot: Slot;
-  selected: boolean;
-  hot: boolean;
+  focused: boolean;
+  equal: boolean;
   glide: boolean;
   narrow: boolean;
-  onHot: () => void;
-  onCold: () => void;
+  onHit: (node: HTMLElement | null) => void;
   onChoose: () => void;
 }) {
   const meta = caption(id, reading);
-  const size = slot === "center" ? stage.focus : stage.small;
+  const size = equal ? stage.small : slot === "center" ? stage.focus : stage.small;
   const x = slot === "center" ? stage.centerX : slot === "left" ? stage.leftX : stage.rightX;
   const motion = glide ? glideStyle : undefined;
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.anchor, motion, { transform: [{ translateX: x }, { translateY: stage.cy }], zIndex: selected ? 2 : 1 }]}
+      style={[styles.anchor, motion, { transform: [{ translateX: x }, { translateY: stage.cy }], zIndex: focused ? 2 : 1 }]}
     >
       <View pointerEvents="none" style={[styles.halo, motion, { width: size, height: size, left: -size / 2, top: -size / 2 }]}>
         {id === "earth" ? <View style={styles.glow} /> : <Orbit mars={id === "mars"} />}
-        {hot ? <View style={styles.hotRing} /> : null}
+        {focused ? <View style={styles.hotRing} /> : null}
       </View>
       <Pressable
-        accessibilityLabel={selected ? `Open ${meta.name}` : `Select ${meta.name}`}
+        ref={(node) => onHit(node as unknown as HTMLElement | null)}
+        accessibilityLabel={`Open ${meta.name}`}
         accessibilityRole="button"
-        onHoverIn={onHot}
-        onHoverOut={onCold}
         onPress={onChoose}
         style={[
           styles.planet,
@@ -193,27 +310,18 @@ function Planet({
           } as ViewStyle,
         ]}
       >
-        <View
-          pointerEvents="none"
-          style={[
-            styles.skin,
-            Platform.OS === "web"
-              ? ({ transitionProperty: "transform", transitionDuration: "160ms", transitionTimingFunction: "ease-out" } as ViewStyle)
-              : null,
-            { transform: [{ scale: hot ? 1.045 : 1 }] },
-          ]}
-        >
+        <View pointerEvents="none" style={styles.skin}>
           <PlanetFill kind={id} />
         </View>
       </Pressable>
-      <View pointerEvents="none" style={[styles.label, motion, { transform: [{ translateY: size / 2 + (selected ? 16 : 12) }] }]}>
+      <View pointerEvents="none" style={[styles.label, motion, { transform: [{ translateY: size / 2 + (focused ? 16 : 12) }] }]}>
         <Text numberOfLines={1} style={[styles.kicker, narrow ? { letterSpacing: 0.2 } : null]}>
           {narrow ? (id === "earth" ? "Today" : id === "moon" ? "Live" : "Next") : meta.kicker}
         </Text>
-        <Text numberOfLines={1} style={[styles.name, selected ? { fontSize: narrow ? 24 : 32 } : null]}>
+        <Text numberOfLines={1} style={[styles.name, focused ? { fontSize: narrow ? 24 : 32 } : null]}>
           {meta.name}
         </Text>
-        {selected ? (
+        {focused ? (
           <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: meta.color }]} />
             <Text numberOfLines={2} style={[styles.status, { color: meta.color }]}>
@@ -223,6 +331,89 @@ function Planet({
         ) : null}
       </View>
     </View>
+  );
+}
+
+function SignalArcs({
+  stage,
+  focus,
+  marsDelay,
+  reduce,
+}: {
+  stage: Stage;
+  focus: Id | null;
+  marsDelay: string;
+  reduce: boolean;
+}) {
+  const radius = (id: Id) => (focus === null ? stage.small : focus === id ? stage.focus : stage.small) / 2;
+  const place = (id: Id) => {
+    if (!focus) return id === "earth" ? stage.leftX : id === "mars" ? stage.rightX : stage.centerX;
+    const slot = slotOf(focus, id);
+    return slot === "center" ? stage.centerX : slot === "left" ? stage.leftX : stage.rightX;
+  };
+  const earth = { x: place("earth"), y: stage.cy, r: radius("earth") };
+  const moon = { x: place("moon"), y: stage.cy, r: radius("moon") };
+  const mars = { x: place("mars"), y: stage.cy, r: radius("mars") };
+  const toMoon = rim(earth.x, earth.y, earth.r, moon.x, moon.y, moon.r);
+  const toMars = rim(earth.x, earth.y, earth.r, mars.x, mars.y, mars.r);
+  const moonLift = Math.min(moon.y - 28, Math.max(32, Math.hypot(toMoon.x2 - toMoon.x1, toMoon.y2 - toMoon.y1) * 0.7));
+  const marsLift = Math.min(earth.y - 24, Math.max(84, Math.hypot(toMars.x2 - toMars.x1, toMars.y2 - toMars.y1) * 0.46));
+  const moonCurve = bend(toMoon, moonLift);
+  const marsCurve = bend(toMars, marsLift);
+  return (
+    <View pointerEvents="none" style={styles.arcs}>
+      <Svg width="100%" height="100%" viewBox={`0 0 ${stage.w} ${stage.h}`} preserveAspectRatio="none">
+        <Travel d={moonCurve.d} color="#9ED0FF" duration={1300} reduce={reduce} />
+        <Travel d={marsCurve.d} color="#FFC59E" duration={15000} reduce={reduce} />
+      </Svg>
+      <Text style={[styles.arcLabel, { left: moonCurve.labelX - 70, top: Math.max(8, moonCurve.labelY - 16), color: colors.blue }]}>Earth ↔ Moon · 1.3 s</Text>
+      <Text style={[styles.arcLabel, { left: marsCurve.labelX - 90, top: Math.max(4, marsCurve.labelY - 18), color: "#FFC59E" }]}>{`Earth ↔ Mars · ${marsDelay}`}</Text>
+    </View>
+  );
+}
+
+function bend(ends: { x1: number; y1: number; x2: number; y2: number }, lift: number) {
+  const cx = (ends.x1 + ends.x2) / 2;
+  const cy = (ends.y1 + ends.y2) / 2 - lift;
+  return { d: `M ${ends.x1} ${ends.y1} Q ${cx} ${cy} ${ends.x2} ${ends.y2}`, labelX: cx, labelY: cy };
+}
+
+function Travel({ d, color, duration, reduce }: { d: string; color: string; duration: number; reduce: boolean }) {
+  const parts = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const [x0, y0, cx, cy, x1, y1] = parts;
+  const length = quadLength(x0 ?? 0, y0 ?? 0, cx ?? 0, cy ?? 0, x1 ?? 0, y1 ?? 0);
+  const offset = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduce) {
+      offset.setValue(0);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.timing(offset, {
+        toValue: -(length + 14),
+        duration,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [duration, length, offset, reduce]);
+  return (
+    <>
+      <Path d={d} stroke={color} strokeOpacity={0.75} strokeWidth={1.4} fill="none" strokeDasharray="4 7" strokeLinecap="round" />
+      {reduce ? null : (
+        <AnimatedPath
+          d={d}
+          stroke={color}
+          strokeWidth={2.4}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`12 ${Math.max(length, 1)}`}
+          strokeDashoffset={offset}
+        />
+      )}
+    </>
   );
 }
 
@@ -308,7 +499,9 @@ const styles = StyleSheet.create({
   liveTxt: { color: colors.ink, fontFamily: sans, fontSize: 14, flexShrink: 1, textAlign: "center" },
   h1: { color: colors.ink, fontFamily: sans, fontWeight: "300", fontSize: 44, letterSpacing: -1, textAlign: "center", width: "100%" },
   sub: { color: colors.muted, fontFamily: sans, fontSize: 17, lineHeight: 24, textAlign: "center", width: "100%", maxWidth: 640 },
-  theater: { marginTop: 8, width: "100%", overflow: "visible" },
+  theater: { marginTop: 8, width: "100%", position: "relative", overflow: "visible" },
+  arcs: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 0 },
+  arcLabel: { position: "absolute", width: 180, textAlign: "center", fontFamily: mono, fontSize: 11, letterSpacing: 0.6 },
   anchor: { position: "absolute", left: 0, top: 0, width: 0, height: 0 },
   halo: { position: "absolute" },
   planet: { position: "absolute", overflow: "hidden", backgroundColor: "#000" },

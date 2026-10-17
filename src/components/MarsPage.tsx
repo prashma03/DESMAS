@@ -36,14 +36,21 @@ const ADVICE = "Same four systems and rules as the Moon base. The relay ship abo
 /** Reference frame for the orbit hero. Positions are fractions of this box so they stay attached as it scales. */
 const HERO_W = 1024;
 const HERO_H = 573;
-/** Full left-cropped fit of that frame, then about 6% smaller so the limb stays clear of the ship. */
-const PLANET_D = Math.round(685 * 0.94);
-const PLANET_CX = 293;
+/** Full left-cropped fit, then 6% smaller so the limb stays clear of the ship, then 12.5% smaller on this dashboard. */
+const PLANET_D = Math.round(685 * 0.94 * 0.875);
+/** Hero units the globe still hangs off the left edge. */
+const PLANET_CROP_LEFT = 29;
+const PLANET_CX = PLANET_D / 2 - PLANET_CROP_LEFT;
 const PLANET_CY = HERO_H / 2;
 const PLANET_LEFT = PLANET_CX - PLANET_D / 2;
 const PLANET_TOP = PLANET_CY - PLANET_D / 2;
 const SHIP = { x: 790, y: 168, w: 148, h: 42 };
-const BASE = { x: 150, y: 448 };
+/** Future Base, as a fraction of the radius from the globe center, so it stays on the same surface point. */
+const BASE_ALONG_RADIUS = { x: (150 - 293) / 322, y: (448 - HERO_H / 2) / 322 };
+const BASE = {
+  x: PLANET_CX + BASE_ALONG_RADIUS.x * (PLANET_D / 2),
+  y: PLANET_CY + BASE_ALONG_RADIUS.y * (PLANET_D / 2),
+};
 const LINK_CTRL = { x: 470, y: 318 };
 const LINK_END = { x: SHIP.x, y: SHIP.y + SHIP.h / 2 };
 const LINK_D = `M ${BASE.x} ${BASE.y} Q ${LINK_CTRL.x} ${LINK_CTRL.y} ${LINK_END.x} ${LINK_END.y}`;
@@ -407,7 +414,7 @@ const styles = StyleSheet.create({
     zIndex: 4,
   },
   shipTag: { left: pctX(SHIP.x), top: pctY(SHIP.y + SHIP.h + 10), zIndex: 6, maxWidth: "24%" },
-  baseTag: { left: pctX(72), top: pctY(BASE.y - 62), zIndex: 6 },
+  baseTag: { left: pctX(BASE.x - 78), top: pctY(BASE.y - 62), zIndex: 6 },
   craft: { flex: 1, height: "100%", flexDirection: "row", alignItems: "center" },
   wing: { flex: 1, height: "34%", flexDirection: "row", gap: 1, backgroundColor: "#0c1524", padding: 1 },
   cell: { flex: 1, backgroundColor: "#1b2d4c" },
