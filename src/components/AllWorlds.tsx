@@ -5,6 +5,7 @@ import { kitFreshness, type KitReading, type KitSource, type LinkStatus } from "
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { AllWorldsSpaceBackground } from "./AllWorldsSpaceBackground";
+import { CometCursorTrail } from "./CometCursorTrail";
 import { mono, PlanetFill, sans, stormLabel } from "./dashboard";
 
 type Id = "earth" | "moon" | "mars";
@@ -151,11 +152,7 @@ export function AllWorlds({
   const reduceMotion = useReducedMotion();
   const hits = useRef<Partial<Record<Id, HTMLElement>>>({});
   const theaterRef = useRef<View>(null);
-  const point = useRef<{ x: number; y: number } | null>(null);
-  const intent = useRef(false);
   const hoverRef = useRef<Id | null>(null);
-  const lockUntil = useRef(0);
-  const movedDuringLock = useRef(false);
   const guess = Math.max(280, Math.min(width, 1520) - (compact ? 28 : 44));
   const focus = hovered ?? selected;
   const stageW = measured || guess;
@@ -174,42 +171,41 @@ export function AllWorlds({
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
-    const hitAt = (x: number, y: number): Id | null => {
-      let found: Id | null = null;
-      for (const id of ORDER) {
-        const node = hits.current[id];
-        if (!node?.getBoundingClientRect) continue;
-        const rect = node.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const radius = rect.width / 2;
-        if ((x - cx) ** 2 + (y - cy) ** 2 <= radius * radius) found = id;
-      }
-      return found;
+    const inside = (id: Id, x: number, y: number) => {
+      const node = hits.current[id];
+      if (!node?.getBoundingClientRect) return false;
+      const rect = node.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const radius = rect.width / 2;
+      return (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius;
     };
-    const commit = (next: Id | null) => {
+    const inStage = (x: number, y: number) => {
+      const node = theaterRef.current as unknown as HTMLElement | null;
+      if (!node?.getBoundingClientRect) return true;
+      const rect = node.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return true;
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    };
+    const choose = (next: Id | null) => {
       if (hoverRef.current === next) return;
       hoverRef.current = next;
       setHovered(next);
-      const until = Date.now() + GLIDE_MS;
-      lockUntil.current = until;
-      movedDuringLock.current = false;
-      window.setTimeout(() => {
-        if (lockUntil.current !== until || !movedDuringLock.current || !point.current) return;
-        commit(hitAt(point.current.x, point.current.y));
-      }, GLIDE_MS + 20);
     };
     const onMove = (event: PointerEvent) => {
-      const prev = point.current;
-      point.current = { x: event.clientX, y: event.clientY };
-      if (!prev) return;
-      if (Math.hypot(event.clientX - prev.x, event.clientY - prev.y) < 3) return;
-      intent.current = true;
-      if (Date.now() < lockUntil.current) {
-        movedDuringLock.current = true;
+      const x = event.clientX;
+      const y = event.clientY;
+      if (!inStage(x, y)) {
+        choose(null);
         return;
       }
-      commit(hitAt(event.clientX, event.clientY));
+      const current = hoverRef.current;
+      if (current && inside(current, x, y)) return;
+      let hit: Id | null = null;
+      for (const id of ORDER) {
+        if (inside(id, x, y)) hit = id;
+      }
+      if (hit) choose(hit);
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
@@ -223,6 +219,7 @@ export function AllWorlds({
   return (
     <>
     <AllWorldsSpaceBackground />
+    <CometCursorTrail />
     <ScrollView style={[styles.scroll, styles.aboveSky]} contentContainerStyle={[styles.page, compact ? styles.pageCompact : null]}>
       <View style={styles.intro}>
         <Pressable style={styles.live} onPress={() => onOpen("moon")}>

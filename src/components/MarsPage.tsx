@@ -277,7 +277,7 @@ export function MarsPage({
         }}
       >
         <View style={styles.planet}>
-          <PlanetFill kind="mars" spinScale={0.82} />
+          <PlanetFill kind="mars" spinScale={0.55} />
         </View>
         <RelayLink reduce={reduceMotion} bob={bob} orbitH={orbitH} />
         <View style={styles.ship}>
