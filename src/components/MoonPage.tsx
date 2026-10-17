@@ -65,7 +65,7 @@ export function MoonPage({
   const { narrow } = useScreen();
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("moon", reading.dark);
-  const night = reading.dark >= 55;
+  const allOn = reading.leds.every((v) => v > 0);
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
   const pulse = useRef(new Animated.Value(0.25)).current;
@@ -103,8 +103,8 @@ export function MoonPage({
         />
         {reading.alarm ? <Animated.View pointerEvents="none" style={[styles.alarm, { opacity: pulse }]} /> : null}
         <DayBadge
-          label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : night ? `Lunar night · ${onCount} of 4 on` : "Lunar day · all systems on"}
-          tone={reading.alarm ? "alert" : night ? "watch" : "ok"}
+          label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : allOn ? "Lunar day · all systems on" : `Lunar night · ${onCount} of 4 on`}
+          tone={reading.alarm ? "alert" : allOn ? "ok" : "watch"}
         />
         {narrow ? null : (
           <View style={styles.linkPill}>

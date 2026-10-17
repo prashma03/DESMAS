@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
 import type { EarthDelay } from "../findings";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
+import { board } from "../serial/board";
 import { colors } from "../theme";
 import { AiMonitor } from "./AIMonitor";
 import {
@@ -14,6 +14,7 @@ import {
   KitReadout,
   Legend,
   Lower,
+  mono,
   Page,
   PlanetFill,
   PowerBlock,
@@ -23,8 +24,21 @@ import {
   Split,
   StatRow,
   stormLabel,
-  systemLine,
 } from "./dashboard";
+
+const CLEAR = require("../../assets/mars/surface-clear.jpg");
+const STORM = require("../../assets/mars/surface-storm.jpg");
+const ADVICE = "Same four systems and rules as the Moon base. The relay ship above handles its own faults.";
+
+/** Clear plate below a light haze, storm plate fully in by a strong dust storm. */
+function stormOpacity(dark: number) {
+  return Math.max(0, Math.min(1, (dark - 18) / (58 - 18)));
+}
+
+function systemStatus(led: number, on: string, off: string) {
+  if (led === 2) return "LOW POWER · LINK TO RELAY SHIP";
+  return led > 0 ? on : off;
+}
 
 const SYSTEMS = [
   { name: "Life support", detail: "Green LED · air and heat" },
@@ -56,13 +70,22 @@ export function MarsPage({
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
   const planet = narrow ? Math.min(150, Math.round(width * 0.36)) : 300;
+  const clearSky = reading.dark < 30;
+  const active = colors.green;
+  const cover = { backgroundColor: "rgba(10,8,6,0.96)" as const };
   const tags = [
-    { title: "Comms tower", line: systemLine(reading.leds[1], "ON · link to relay ship", "OFF"), color: colors.ledBlue, on: on(1), style: { left: "36%" as const, top: "16%" as const } },
-    { title: "Science lab", line: on(2) ? "ON" : "OFF", color: colors.ledYellow, on: on(2), style: { left: "16%" as const, top: "40%" as const } },
-    { title: "Hab · life support", line: on(0) ? `ON · humidity ${Math.round(reading.hum)}%` : "OFF", color: colors.green, on: on(0), style: { left: "42%" as const, top: "34%" as const } },
-    { title: "Comfort dome", line: on(3) ? "ON" : "OFF", color: colors.ledRed, on: on(3), style: { right: "30%" as const, top: "46%" as const } },
-    { title: "Solar arrays", line: `Charging · ${solar}%`, color: colors.gold, on: true, style: { right: "8%" as const, top: "20%" as const } },
+    { title: "Comms tower", line: systemStatus(reading.leds[1], "ON · LINK TO RELAY SHIP", "OFF"), color: reading.leds[1] === 2 ? colors.gold : active, on: reading.leds[1] > 0, style: { ...cover, left: "38%" as const, top: "14%" as const, minWidth: 168 } },
+    { title: "Science lab", line: on(2) ? "ON" : "OFF · SAVING POWER", color: active, on: on(2), style: { ...cover, left: "18%" as const, top: "42%" as const, minWidth: 156 } },
+    { title: "Hab · life support", line: on(0) ? `ON · HUMIDITY ${Math.round(reading.hum)}%` : "OFF", color: active, on: on(0), style: { ...cover, left: "39%" as const, top: "34%" as const, minWidth: 168 } },
+    { title: "Comfort dome", line: on(3) ? "ON" : "OFF · SAVING POWER", color: active, on: on(3), style: { ...cover, left: "63%" as const, top: "58%" as const, minWidth: 156 } },
+    { title: "Solar arrays", line: thick ? `DUST · ${solar}%` : `CHARGING · ${solar}%`, color: colors.gold, on: true, style: { ...cover, right: "7%" as const, top: "16%" as const, minWidth: 132 } },
   ];
+  const phase = clearSky ? "CLEAR SKY" : `DUST STORM · ${storm.toUpperCase()}`;
+  const phaseDetail = clearSky
+    ? onCount === 4
+      ? "Solar charging · all systems on"
+      : `Solar charging · ${onCount} of 4 on`
+    : `Solar input ${solar}% · power conservation active`;
 
   return (
     <Page>
@@ -104,26 +127,42 @@ export function MarsPage({
         </>
       ) : null}
 
-      <View style={[styles.scene, narrow ? { height: 300 } : null]}>
-        <LinearGradient colors={thick ? ["#4a2018", "#7a341c", "#9a3a1c", "#6a2814"] : ["#c45a32", "#e07a45", "#c4512a", "#8d3418"]} style={StyleSheet.absoluteFill} />
-        <View style={styles.ground} />
-        <View style={[styles.hab, narrow ? { left: "16%", width: "36%" } : { left: "24%" }]} />
-        <View style={[styles.hab, narrow ? { left: "42%", width: "28%" } : { left: "40%", width: 110 }]} />
-        <View style={styles.dome} />
-        <View style={styles.array} />
-        <View style={[styles.veil, { opacity: Math.min(0.55, reading.dark / 140) }]} />
-        <DayBadge label={thick ? `Dust · ${storm.toLowerCase()} · lunar night rules` : "Clear sky · solar charging · all systems on"} tone={thick ? "watch" : "ok"} />
+      <View style={styles.scene}>
+        <Image source={CLEAR} style={styles.photo} resizeMode="stretch" accessibilityLabel="Mars future base under a clear sky" />
+        <Image
+          source={STORM}
+          style={[styles.photo, styles.stormFade, { opacity: stormOpacity(reading.dark) }]}
+          resizeMode="stretch"
+          accessibilityLabel="Mars future base in a dust storm"
+        />
+        <View style={styles.phaseRow}>
+          <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm]}>
+            <Text style={[styles.pillTxt, { color: clearSky ? colors.ok : "#E7B08A" }]}>{phase}</Text>
+          </View>
+          <View style={styles.pill}>
+            <Text style={styles.pillDetail} numberOfLines={2}>{phaseDetail}</Text>
+          </View>
+        </View>
         {narrow ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
-        <SceneTitle kicker="03 · Mars · surface · crewed" title="Future base" />
+        <View style={[styles.titleCard, narrow ? styles.titleCardNarrow : null]}>
+          <Text style={styles.warmKicker}>03 · Mars · surface · crewed</Text>
+          <Text style={[styles.title, narrow ? { fontSize: 26 } : null]}>Future base</Text>
+        </View>
         {narrow ? null : (
-          <KitReadout
-            live={source === "serial"}
-            dark={reading.dark}
-            hum={reading.hum}
-            temp={reading.temp}
-            muted={reading.muted}
-            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults. Send c to recalibrate, m to mute the buzzer."
-          />
+          <View style={styles.advice}>
+            <Text style={styles.warmKicker}>The AI advises this crew</Text>
+            <Text style={styles.adviceTxt}>{ADVICE}</Text>
+            {source === "serial" ? (
+              <View style={styles.cmdRow}>
+                <Pressable style={styles.cmd} onPress={() => void board.send("c")}>
+                  <Text style={styles.cmdTxt}>Recalibrate</Text>
+                </Pressable>
+                <Pressable style={styles.cmd} onPress={() => void board.send("m")}>
+                  <Text style={styles.cmdTxt}>{reading.muted ? "Unmute buzzer" : "Mute buzzer"}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
         )}
       </View>
       {narrow ? (
@@ -133,6 +172,10 @@ export function MarsPage({
               <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
             ))}
           </Legend>
+          <View style={styles.adviceInline}>
+            <Text style={styles.warmKicker}>The AI advises this crew</Text>
+            <Text style={styles.adviceTxt}>{ADVICE}</Text>
+          </View>
           <KitReadout
             inline
             live={source === "serial"}
@@ -140,7 +183,7 @@ export function MarsPage({
             hum={reading.hum}
             temp={reading.temp}
             muted={reading.muted}
-            note="The AI advises this crew. Same four systems and rules as the Moon base. The relay ship above handles its own faults. Send c to recalibrate, m to mute the buzzer."
+            note="Cover the light sensor to thicken the dust storm. Send c to recalibrate, m to mute the buzzer."
           />
         </>
       ) : null}
@@ -206,10 +249,51 @@ const styles = StyleSheet.create({
   stormVal: { color: "#FFB07A", fontSize: 32, fontWeight: "300" },
   stormWord: { position: "absolute", right: 12, top: 36, color: colors.ink, fontSize: 14 },
   note: { color: colors.dim, fontSize: 12, lineHeight: 16 },
-  scene: { height: 420, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
-  ground: { position: "absolute", left: 0, right: 0, bottom: 0, height: "38%", backgroundColor: "#8a3018" },
-  hab: { position: "absolute", bottom: "30%", width: 140, height: 44, borderRadius: 22, backgroundColor: "#f4f1ea" },
-  dome: { position: "absolute", left: "54%", bottom: "26%", width: 64, height: 44, borderTopLeftRadius: 36, borderTopRightRadius: 36, backgroundColor: "#efeae2" },
-  array: { position: "absolute", right: "12%", bottom: "34%", width: 84, height: 48, backgroundColor: "#16325c", transform: [{ rotate: "-16deg" }] },
-  veil: { ...StyleSheet.absoluteFillObject, backgroundColor: "#2a0c08" },
+  scene: { width: "100%", aspectRatio: 1024 / 491, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: "#000" },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  stormFade: (Platform.OS === "web"
+    ? { transitionProperty: "opacity", transitionDuration: "900ms", transitionTimingFunction: "ease" }
+    : {}) as ImageStyle,
+  phaseRow: { position: "absolute", top: 14, left: 14, zIndex: 4, flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: "78%" },
+  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(12,8,6,0.96)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
+  pillClear: { backgroundColor: "rgba(20,28,18,0.78)" },
+  pillStorm: { backgroundColor: "rgba(62,28,16,0.82)", borderColor: "rgba(231,176,138,0.35)" },
+  pillTxt: { fontFamily: mono, fontSize: 11, letterSpacing: 0.8 },
+  pillDetail: { color: colors.ink, fontSize: 12, fontFamily: mono },
+  titleCard: {
+    position: "absolute",
+    left: 16,
+    bottom: 16,
+    zIndex: 4,
+    maxWidth: "42%",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(18,8,6,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(196,96,58,0.45)",
+  },
+  titleCardNarrow: { left: 12, right: 12, bottom: 12, maxWidth: "70%" },
+  warmKicker: { color: "#E7B08A", fontFamily: mono, fontSize: 11, letterSpacing: 1.1, textTransform: "uppercase" },
+  title: { color: colors.ink, fontSize: 34, fontWeight: "300", letterSpacing: -0.6, marginTop: 2 },
+  advice: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    zIndex: 4,
+    width: 300,
+    maxWidth: "38%",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 6,
+    backgroundColor: "rgba(28,10,8,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(196,96,58,0.4)",
+  },
+  adviceInline: { width: "100%", padding: 12, borderRadius: 16, gap: 6, backgroundColor: "rgba(28,10,8,0.96)", borderWidth: 1, borderColor: "rgba(196,96,58,0.4)" },
+  adviceTxt: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  cmdRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  cmd: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(0,0,0,0.35)" },
+  cmdTxt: { color: colors.ink, fontSize: 12 },
 });
