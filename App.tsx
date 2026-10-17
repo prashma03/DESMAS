@@ -11,7 +11,6 @@ import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
-import { Starfield } from "./src/components/Starfield";
 import { useScreen } from "./src/layout";
 const NAV: { id: WorldId; label: string }[] = [
   { id: "all", label: "All worlds" },
@@ -85,7 +84,6 @@ export default function App() {
   return (
     <SafeAreaView style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}>
       <StatusBar style="light" />
-      {world === "all" ? null : <Starfield />}
       <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
         <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
           <View style={styles.brand}>

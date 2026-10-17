@@ -31,6 +31,11 @@ import { SceneScanOverlay } from "./SceneScanOverlay";
 
 const CLEAR = require("../../assets/mars/surface-clear.jpg");
 const STORM = require("../../assets/mars/surface-storm.jpg");
+const RELAY = require("../../assets/mars/relay-satellite.png");
+/** Pixel size of the transparent relay sprite. */
+const RELAY_ASPECT = 958 / 441;
+/** Gentle hover, in CSS pixels. The ship box itself does not move. */
+const FLOAT_PX = 2;
 const ADVICE = "Same four systems and rules as the Moon base. The relay ship above handles its own faults.";
 
 /** Reference frame for the orbit hero. Positions are fractions of this box so they stay attached as it scales. */
@@ -45,6 +50,8 @@ const PLANET_CY = HERO_H / 2;
 const PLANET_LEFT = PLANET_CX - PLANET_D / 2;
 const PLANET_TOP = PLANET_CY - PLANET_D / 2;
 const SHIP = { x: 790, y: 168, w: 148, h: 42 };
+/** Where the dashed link meets the left wing, as a fraction of the ship box. The sprite is contained and centered. */
+const LINK_AT = { x: 0.2014, y: 0.2993 };
 /** Future Base, as a fraction of the radius from the globe center, so it stays on the same surface point. */
 const BASE_ALONG_RADIUS = { x: (150 - 293) / 322, y: (448 - HERO_H / 2) / 322 };
 const BASE = {
@@ -52,8 +59,12 @@ const BASE = {
   y: PLANET_CY + BASE_ALONG_RADIUS.y * (PLANET_D / 2),
 };
 const LINK_CTRL = { x: 470, y: 318 };
-const LINK_END = { x: SHIP.x, y: SHIP.y + SHIP.h / 2 };
-const LINK_D = `M ${BASE.x} ${BASE.y} Q ${LINK_CTRL.x} ${LINK_CTRL.y} ${LINK_END.x} ${LINK_END.y}`;
+const LINK_END = { x: SHIP.x + SHIP.w * LINK_AT.x, y: SHIP.y + SHIP.h * LINK_AT.y };
+
+function linkD(dy: number) {
+  return `M ${BASE.x} ${BASE.y} Q ${LINK_CTRL.x} ${LINK_CTRL.y} ${LINK_END.x} ${LINK_END.y + dy}`;
+}
+
 const LINK_LEN = quadLength(BASE.x, BASE.y, LINK_CTRL.x, LINK_CTRL.y, LINK_END.x, LINK_END.y);
 const SIGNAL_DASH = 16;
 const SIGNAL_PERIOD = SIGNAL_DASH + LINK_LEN;
@@ -108,32 +119,21 @@ function useReducedMotion() {
   return reduce;
 }
 
-function RelayCraft() {
+function RelayCraft({ bob }: { bob: Animated.Value }) {
+  const travel = bob.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-FLOAT_PX, FLOAT_PX],
+  });
   return (
-    <View style={styles.craft} accessibilityLabel="Relay ship">
-      <View style={styles.wing}>
-        <View style={styles.cell} />
-        <View style={styles.cell} />
-        <View style={styles.cell} />
-      </View>
-      <View style={styles.busCol}>
-        <View style={styles.dish} />
-        <View style={styles.mast} />
-        <View style={styles.bus}>
-          <View style={styles.port} />
-        </View>
-      </View>
-      <View style={styles.wing}>
-        <View style={styles.cell} />
-        <View style={styles.cell} />
-        <View style={styles.cell} />
-      </View>
-    </View>
+    <Animated.View style={[styles.craft, { transform: [{ translateY: travel }] }]} accessibilityLabel="Relay ship">
+      <Image source={RELAY} accessible={false} style={styles.craftImg} resizeMode="contain" />
+    </Animated.View>
   );
 }
 
-function RelayLink({ reduce }: { reduce: boolean }) {
+function RelayLink({ reduce, bob, orbitH }: { reduce: boolean; bob: Animated.Value; orbitH: number }) {
   const offset = useRef(new Animated.Value(0)).current;
+  const [dy, setDy] = useState(0);
   useEffect(() => {
     if (reduce) {
       offset.setValue(0);
@@ -151,13 +151,26 @@ function RelayLink({ reduce }: { reduce: boolean }) {
     return () => anim.stop();
   }, [offset, reduce]);
 
+  useEffect(() => {
+    if (reduce || orbitH <= 0) {
+      setDy(0);
+      return;
+    }
+    const id = bob.addListener(({ value }) => {
+      setDy(((value * FLOAT_PX) / orbitH) * HERO_H);
+    });
+    return () => bob.removeListener(id);
+  }, [bob, orbitH, reduce]);
+
+  const d = linkD(dy);
+
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${HERO_W} ${HERO_H}`} preserveAspectRatio="none" style={styles.link} pointerEvents="none">
       <Circle cx={BASE.x} cy={BASE.y} r={10} fill="#F6D2B6" opacity={0.28} />
-      <Path d={LINK_D} stroke="#F2D3B8" strokeWidth={1.6} fill="none" strokeDasharray="5 7" strokeLinecap="round" />
+      <Path d={d} stroke="#F2D3B8" strokeWidth={1.6} fill="none" strokeDasharray="5 7" strokeLinecap="round" />
       {reduce ? null : (
         <AnimatedPath
-          d={LINK_D}
+          d={d}
           stroke="#F8E6D4"
           strokeWidth={2.2}
           fill="none"
@@ -205,6 +218,24 @@ export function MarsPage({
 }) {
   const { narrow } = useScreen();
   const reduceMotion = useReducedMotion();
+  const [orbitH, setOrbitH] = useState(0);
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      bob.setValue(0);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.timing(bob, {
+        toValue: 1,
+        duration: 6000,
+        easing: (t: number) => Math.sin(t * Math.PI * 2),
+        useNativeDriver: false,
+      }),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [bob, reduceMotion]);
   const fresh = kitFreshness(source, link);
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("mars", reading.dark);
@@ -233,13 +264,20 @@ export function MarsPage({
 
   return (
     <Page>
-      <View nativeID="surface" style={styles.orbit}>
+      <View
+        nativeID="surface"
+        style={styles.orbit}
+        onLayout={(e) => {
+          const next = e.nativeEvent.layout.height;
+          setOrbitH((prev) => (Math.abs(prev - next) < 0.5 ? prev : next));
+        }}
+      >
         <View style={styles.planet}>
           <PlanetFill kind="mars" />
         </View>
-        <RelayLink reduce={reduceMotion} />
+        <RelayLink reduce={reduceMotion} bob={bob} orbitH={orbitH} />
         <View style={styles.ship}>
-          <RelayCraft />
+          <RelayCraft bob={bob} />
         </View>
         {narrow ? null : (
           <>
@@ -412,26 +450,12 @@ const styles = StyleSheet.create({
     width: pctX(SHIP.w),
     height: pctY(SHIP.h),
     zIndex: 4,
+    overflow: "visible",
   },
   shipTag: { left: pctX(SHIP.x), top: pctY(SHIP.y + SHIP.h + 10), zIndex: 6, maxWidth: "24%" },
   baseTag: { left: pctX(BASE.x - 78), top: pctY(BASE.y - 62), zIndex: 6 },
-  craft: { flex: 1, height: "100%", flexDirection: "row", alignItems: "center" },
-  wing: { flex: 1, height: "34%", flexDirection: "row", gap: 1, backgroundColor: "#0c1524", padding: 1 },
-  cell: { flex: 1, backgroundColor: "#1b2d4c" },
-  busCol: { width: "20%", height: "100%", alignItems: "center", justifyContent: "center" },
-  dish: { width: "78%", height: "22%", borderRadius: 8, backgroundColor: "#d4b483", borderWidth: 1, borderColor: "#f3ead8" },
-  mast: { width: 1, height: "8%", backgroundColor: "#efe6d4" },
-  bus: {
-    width: "100%",
-    height: "42%",
-    borderRadius: 4,
-    backgroundColor: "#f7f4ee",
-    borderWidth: 1,
-    borderColor: "#ddd6cb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  port: { width: "42%", height: "28%", borderRadius: 2, backgroundColor: "#c8c1b6" },
+  craft: { width: "100%", height: "100%", flexDirection: "row", justifyContent: "flex-start", alignItems: "center" },
+  craftImg: { height: "100%", aspectRatio: RELAY_ASPECT, maxWidth: "100%" },
   delayPill: { position: "absolute", top: 16, right: 16, zIndex: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(8,10,14,0.72)", borderWidth: 1, borderColor: colors.line },
   delayTxt: { color: "#FFC59E", fontSize: 11, letterSpacing: 0.6 },
   stormCard: { position: "absolute", right: 16, bottom: 16, zIndex: 3, width: 220, maxWidth: "42%", padding: 12, borderRadius: 16, backgroundColor: "rgba(8,10,14,0.82)", borderWidth: 1, borderColor: colors.line, gap: 4 },
