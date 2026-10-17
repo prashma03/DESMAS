@@ -198,12 +198,14 @@ export type Stat = {
   note: string;
   series?: number[];
   color?: string;
+  /** Same red card border the clinic uses when a reading is past its cutoff. */
+  alert?: boolean;
 };
 
 function StatCard({ stat }: { stat: Stat }) {
   const { narrow } = useScreen();
   return (
-    <View style={[styles.stat, narrow ? { flexBasis: "47%" } : null]}>
+    <View style={[styles.stat, narrow ? { flexBasis: "47%" } : null, stat.alert ? styles.statAlert : null]}>
       <View style={styles.statHead}>
         <Text style={[styles.kicker, { flexShrink: 1 }]}>{stat.label}</Text>
         {stat.badge ? <Text style={styles.badgeMini}>{stat.badge}</Text> : null}
@@ -657,6 +659,7 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4,
   },
+  statAlert: { borderColor: "rgba(255,107,94,0.5)" },
   statHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
   badgeMini: {
     color: colors.dim,

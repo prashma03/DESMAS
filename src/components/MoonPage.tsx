@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
-import { Animated, Image, Platform, StyleSheet, Text, View, type ImageStyle } from "react-native";
+import { Image, Platform, StyleSheet, Text, View, type ImageStyle, type ViewStyle } from "react-native";
 import type { KitEvent, KitReading, KitSource } from "../kit/types";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { SceneScanOverlay } from "./SceneScanOverlay";
+import { HumidityRings } from "./HumidityRings";
 import { AiMonitor } from "./AIMonitor";
 import {
   AlertFeed,
@@ -14,8 +14,10 @@ import {
   KitReadout,
   Legend,
   Lower,
+  mono,
   Page,
   PowerBlock,
+  sans,
   SceneTitle,
   SerialLog,
   SideNav,
@@ -41,6 +43,39 @@ function solarWord(dark: number) {
   if (dark >= 55) return "LOW";
   if (dark >= 30) return "DIM";
   return "CHARGING";
+}
+
+function HabLabel({
+  alarm,
+  hum,
+  led,
+  style,
+  inline,
+}: {
+  alarm: boolean;
+  hum: number;
+  led: number;
+  style?: ViewStyle;
+  inline?: boolean;
+}) {
+  if (!alarm) {
+    return (
+      <GlassTag
+        inline={inline}
+        title="Hab A"
+        line={`LIFE SUPPORT: ${powerWord(led)}`}
+        color={colors.green}
+        on={led > 0}
+        style={style}
+      />
+    );
+  }
+  return (
+    <View style={[styles.habAlert, inline ? styles.habInline : null, style]}>
+      <Text style={styles.habTitle}>Hab A · life support</Text>
+      <Text style={styles.habLine}>{`HUMIDITY ${Math.round(hum)}% · ALERT`}</Text>
+    </View>
+  );
 }
 
 const SYSTEMS = [
@@ -69,28 +104,15 @@ export function MoonPage({
   const allOn = reading.leds.every((v) => v > 0);
   const on = (i: number) => reading.leds[i] > 0;
   const onCount = reading.leds.filter((v) => v > 0).length;
-  const pulse = useRef(new Animated.Value(0.25)).current;
-  useEffect(() => {
-    if (!reading.alarm) {
-      pulse.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.9, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.2, duration: 700, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reading.alarm, pulse]);
+  const humidityAlarm = reading.alarm === 1;
+  const above = { zIndex: 4 as const };
   const tags = [
-    { title: "Communications Tower", line: `COMMS: ${powerWord(reading.leds[1])}`, color: reading.leds[1] === 2 ? colors.gold : colors.ledBlue, on: on(1), style: { left: "44%" as const, top: "28%" as const } },
-    { title: "Science Lab", line: `SCIENCE: ${powerWord(reading.leds[2])}`, color: colors.ledYellow, on: on(2), style: { left: "6%" as const, top: "52%" as const } },
-    { title: "Hab A", line: `LIFE SUPPORT: ${powerWord(reading.leds[0])}`, color: colors.green, on: on(0), style: { left: "36%" as const, top: "44%" as const } },
-    { title: "Comfort Module", line: `COMFORT: ${powerWord(reading.leds[3])}`, color: colors.ledRed, on: on(3), style: { left: "54%" as const, top: "68%" as const } },
-    { title: "Solar Arrays", line: `SOLAR INPUT: ${solarWord(reading.dark)}`, color: colors.gold, on: reading.dark < 55, style: { right: "2%" as const, top: "38%" as const } },
+    { title: "Communications Tower", line: `COMMS: ${powerWord(reading.leds[1])}`, color: reading.leds[1] === 2 ? colors.gold : colors.ledBlue, on: on(1), style: { ...above, left: "44%" as const, top: "28%" as const } },
+    { title: "Science Lab", line: `SCIENCE: ${powerWord(reading.leds[2])}`, color: colors.ledYellow, on: on(2), style: { ...above, left: "6%" as const, top: "52%" as const } },
+    { title: "Comfort Module", line: `COMFORT: ${powerWord(reading.leds[3])}`, color: colors.ledRed, on: on(3), style: { ...above, left: "54%" as const, top: "68%" as const } },
+    { title: "Solar Arrays", line: `SOLAR INPUT: ${solarWord(reading.dark)}`, color: colors.gold, on: reading.dark < 55, style: { ...above, right: "2%" as const, top: "38%" as const } },
   ];
+  const habStyle = { ...above, left: "36%" as const, top: "44%" as const };
 
   return (
     <Page>
@@ -103,7 +125,7 @@ export function MoonPage({
           accessibilityLabel="Artemis base during lunar night"
         />
         <SceneScanOverlay tone="moon" />
-        {reading.alarm ? <Animated.View pointerEvents="none" style={[styles.alarm, { opacity: pulse }]} /> : null}
+        <HumidityRings active={humidityAlarm} />
         <DayBadge
           label={reading.alarm ? `Hab A humidity ${Math.round(reading.hum)}%` : allOn ? "Lunar day · all systems on" : `Lunar night · ${onCount} of 4 on`}
           tone={reading.alarm ? "alert" : allOn ? "ok" : "watch"}
@@ -114,7 +136,14 @@ export function MoonPage({
             <Text style={styles.linkTxt}>Earth · 1.3 s away by radio</Text>
           </View>
         )}
-        {narrow ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
+        {narrow ? null : (
+          <>
+            {tags.map((tag) => (
+              <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />
+            ))}
+            <HabLabel alarm={humidityAlarm} hum={reading.hum} led={reading.leds[0]} style={habStyle} />
+          </>
+        )}
         <SceneTitle kicker="02 · Moon · lunar south pole" title="Artemis base" />
         {narrow ? null : (
           <KitReadout
@@ -134,6 +163,7 @@ export function MoonPage({
             {tags.map((tag) => (
               <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
             ))}
+            <HabLabel inline alarm={humidityAlarm} hum={reading.hum} led={reading.leds[0]} />
           </Legend>
           <KitReadout
             inline
@@ -151,7 +181,7 @@ export function MoonPage({
         stats={[
           { label: "Solar input", badge: "A0", value: `${solar}%`, note: `Light sensor, ${Math.round(reading.dark)}% dark`, series: history.map((h) => solarOf(h.dark)), color: colors.gold },
           { label: "Systems on", badge: "LEDs", value: `${onCount} of 4`, note: "Lowest priority goes off first", series: history.map((h) => h.leds.filter((v) => v > 0).length), color: colors.green },
-          { label: "Humidity · Hab A", badge: "DHT11", value: `${Math.round(reading.hum)}%`, valueColor: reading.alarm ? colors.alert : colors.ink, note: `Cutoff ${Math.round(reading.cut)}%`, series: history.map((h) => h.hum), color: colors.ledBlue },
+          { label: "Humidity · Hab A", badge: "DHT11", value: `${Math.round(reading.hum)}%`, valueColor: humidityAlarm ? colors.alert : colors.ink, note: humidityAlarm ? `Above cutoff (${Math.round(reading.cut)}%)` : `Cutoff ${Math.round(reading.cut)}%`, series: history.map((h) => h.hum), color: humidityAlarm ? colors.alert : colors.ledBlue, alert: humidityAlarm },
           { label: "Temp · Hab A", badge: "DHT11", value: `${reading.temp.toFixed(1)} °C`, note: "Inside the hab", series: history.map((h) => h.temp), color: colors.ledBlue },
           { label: "Battery", value: `${battery}%`, note: "Estimate · no sensor on the kit", series: history.map((h) => batteryEstimate("moon", h.dark)), color: colors.gold },
           { label: "Earth link", value: "1.3 s", note: "One way, by radio", color: colors.blue },
@@ -204,17 +234,21 @@ const styles = StyleSheet.create({
   nightFade: (Platform.OS === "web"
     ? { transitionProperty: "opacity", transitionDuration: "800ms", transitionTimingFunction: "ease" }
     : {}) as ImageStyle,
-  alarm: {
+  habAlert: {
     position: "absolute",
-    left: "36%",
-    top: "48%",
-    width: "20%",
-    height: "16%",
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: colors.alert,
-    backgroundColor: "rgba(248,113,113,0.1)",
+    zIndex: 4,
+    backgroundColor: "rgba(8,10,14,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,107,94,0.92)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 3,
+    maxWidth: "100%",
   },
+  habInline: { position: "relative", alignSelf: "flex-start", flexShrink: 1 },
+  habTitle: { color: "#FFFFFF", fontSize: 13, fontFamily: sans },
+  habLine: { color: colors.alert, fontSize: 11, fontFamily: mono, letterSpacing: 0.4 },
   linkPill: {
     position: "absolute",
     top: 16,
