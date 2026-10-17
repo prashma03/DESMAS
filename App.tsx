@@ -2,7 +2,9 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, Text, View } from "react-native";
 import { AllWorlds } from "./src/components/AllWorlds";
+import { StartupIntro } from "./src/components/StartupIntro";
 import { WorldView } from "./src/components/WorldView";
+import { completeIntro, isIntroComplete } from "./src/introSession";
 import type { EarthDelay } from "./src/findings";
 import { kitStore } from "./src/kit/store";
 import { kitFreshness, type WorldId } from "./src/kit/types";
@@ -22,6 +24,7 @@ const NAV: { id: WorldId; label: string }[] = [
 export default function App() {
   const kit = useKit();
   const { compact, narrow } = useScreen();
+  const [showIntro, setShowIntro] = useState(() => !isIntroComplete());
   const [world, setWorld] = useState<WorldId>("all");
   const [delay, setDelay] = useState<EarthDelay | null>(null);
   const fresh = kitFreshness(kit.source, kit.link);
@@ -82,8 +85,14 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}>
-      <StatusBar style="light" />
+    <View style={styles.boot}>
+      <SafeAreaView
+        accessibilityElementsHidden={showIntro}
+        importantForAccessibility={showIntro ? "no-hide-descendants" : "auto"}
+        pointerEvents={showIntro ? "none" : "auto"}
+        style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}
+      >
+      <StatusBar style="light" hidden={showIntro} />
       <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
         <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
           <View style={styles.brand}>
@@ -161,7 +170,16 @@ export default function App() {
         )}
       </View>
       <HardwareDiag kit={kit} />
-    </SafeAreaView>
+      </SafeAreaView>
+      {showIntro ? (
+        <StartupIntro
+          onComplete={() => {
+            completeIntro();
+            setShowIntro(false);
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -194,6 +212,7 @@ function formatUptime(ms: number) {
 }
 
 const styles = StyleSheet.create({
+  boot: { flex: 1, height: "100%", backgroundColor: "#000" },
   stage: { zIndex: 1 },
   notice: {
     zIndex: 2,
