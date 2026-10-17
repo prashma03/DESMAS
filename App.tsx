@@ -19,12 +19,24 @@ const NAV: { id: WorldId; label: string }[] = [
   { id: "mars", label: "Mars" },
 ];
 
-const STARS = Array.from({ length: 48 }, (_, i) => ({
-  left: `${(i * 47) % 100}%` as const,
-  top: `${(i * 29) % 100}%` as const,
-  size: i % 8 === 0 ? 2 : 1,
-  opacity: 0.18 + (i % 5) * 0.1,
-}));
+function starField(count: number) {
+  let seed = 20261017;
+  const next = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  return Array.from({ length: count }, () => {
+    const roll = next();
+    return {
+      left: `${next() * 100}%` as const,
+      top: `${next() * 100}%` as const,
+      size: roll > 0.94 ? 3 : roll > 0.72 ? 2 : 1,
+      opacity: 0.28 + next() * 0.5,
+    };
+  });
+}
+
+const STARS = starField(150);
 
 export default function App() {
   const kit = useKit();
