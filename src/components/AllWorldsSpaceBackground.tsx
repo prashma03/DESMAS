@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
 
 /**
  * Decorative sky for the All Worlds page only. One canvas, no React updates
@@ -238,6 +238,17 @@ export function AllWorldsSpaceBackground() {
       }
     };
 
+    const drawStill = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(plate, 0, 0, w, h);
+      for (const star of stars) {
+        if (!star.twinkle && !star.breathe) continue;
+        drawStar(ctx, star, star.nx * w, star.ny * h, 1, 1);
+      }
+    };
+
     const fit = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.max(1, window.innerWidth);
@@ -291,7 +302,7 @@ export function AllWorldsSpaceBackground() {
 
     fit();
     if (reduced.matches) {
-      ctx.drawImage(plate, 0, 0, window.innerWidth, window.innerHeight);
+      drawStill();
     } else {
       raf = requestAnimationFrame(frame);
       queueComet();
@@ -303,8 +314,7 @@ export function AllWorldsSpaceBackground() {
       window.clearTimeout(cometTimer);
       comet = null;
       if (reduced.matches) {
-        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-        ctx.drawImage(plate, 0, 0, window.innerWidth, window.innerHeight);
+        drawStill();
         return;
       }
       raf = requestAnimationFrame(frame);
@@ -331,14 +341,15 @@ export function AllWorldsSpaceBackground() {
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={styles.host}
+      style={[styles.host, webFixed]}
     />
   );
 }
 
+const webFixed = { position: "fixed" } as unknown as ViewStyle;
+
 const styles = StyleSheet.create({
   host: {
-    position: "fixed",
     left: 0,
     right: 0,
     top: 0,

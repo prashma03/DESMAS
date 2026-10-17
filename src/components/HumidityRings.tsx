@@ -79,9 +79,10 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 
 /**
  * Hab A cylinder in artemis-day.jpg / artemis-night.jpg (1006×492).
- * The lit body runs about x 450–555 and y 260–318, so the ring origin is 50% / 58.8%.
+ * The lit body runs about x 450–555 and y 260–318. The on-screen midpoint of
+ * that span sits at 48.5% / 58.8% of the hero, which is where the rings originate.
  */
-const ORIGIN = { left: "50%" as const, top: "58.8%" as const };
+const ORIGIN = { left: "48.5%" as const, top: "58.8%" as const };
 
 function Ring({ rx, stroke, opacity }: { rx: number; stroke: string; opacity?: number }) {
   return (

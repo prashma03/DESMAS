@@ -120,7 +120,11 @@ export const kitStore = {
       emit();
       return;
     }
-    state = { ...state, link: "disconnected", notice };
+    state = {
+      ...state,
+      link: "disconnected",
+      notice: "The board disconnected. The last reading stays on screen and is marked stale.",
+    };
     emit();
   },
   markError(notice: string) {

@@ -28,7 +28,7 @@ const NOTICES = {
   blocked: "USB access is blocked here, so DESMAS keeps showing the simulated kit. Open it in a Chrome or Edge tab at http://localhost.",
   notPicked: "No board was picked. Plug in the Arduino and try again.",
   busy: "Could not open the board. Close the Arduino Serial Monitor, then try again.",
-  lost: "The board disconnected. Showing the simulated kit again.",
+  lost: "The board disconnected before a reading arrived. DESMAS is still on the simulated kit.",
 };
 
 const BAUD_RATE = 9600;
@@ -108,7 +108,8 @@ export function createBoardLink(handlers: BoardHandlers) {
       handlers.onNotice(globalThis.isSecureContext === false ? NOTICES.insecure : NOTICES.noSerial);
       return;
     }
-    if (port || opening) return;
+    if (opening) return;
+    if (port) await disconnect();
     let picked: SerialPortLike;
     try {
       picked = await serial.requestPort();

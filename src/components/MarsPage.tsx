@@ -42,7 +42,7 @@ const PLANET_CX = 293;
 const PLANET_CY = HERO_H / 2;
 const PLANET_LEFT = PLANET_CX - PLANET_D / 2;
 const PLANET_TOP = PLANET_CY - PLANET_D / 2;
-const SHIP = { x: 808, y: 176, w: 156, h: 40 };
+const SHIP = { x: 790, y: 168, w: 148, h: 42 };
 const BASE = { x: 150, y: 448 };
 const LINK_CTRL = { x: 470, y: 318 };
 const LINK_END = { x: SHIP.x, y: SHIP.y + SHIP.h / 2 };
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     top: pctY(PLANET_TOP),
     width: pctX(PLANET_D),
     height: pctY(PLANET_D),
-    borderRadius: PLANET_D,
+    borderRadius: 9999,
     overflow: "hidden",
     zIndex: 1,
   },
@@ -406,10 +406,10 @@ const styles = StyleSheet.create({
     height: pctY(SHIP.h),
     zIndex: 4,
   },
-  shipTag: { right: "2%", top: pctY(SHIP.y + SHIP.h + 8), zIndex: 6, maxWidth: "28%" },
+  shipTag: { left: pctX(SHIP.x), top: pctY(SHIP.y + SHIP.h + 10), zIndex: 6, maxWidth: "24%" },
   baseTag: { left: pctX(72), top: pctY(BASE.y - 62), zIndex: 6 },
   craft: { flex: 1, height: "100%", flexDirection: "row", alignItems: "center" },
-  wing: { flex: 1, height: "28%", flexDirection: "row", gap: 1, backgroundColor: "#0c1524", padding: 1 },
+  wing: { flex: 1, height: "34%", flexDirection: "row", gap: 1, backgroundColor: "#0c1524", padding: 1 },
   cell: { flex: 1, backgroundColor: "#1b2d4c" },
   busCol: { width: "20%", height: "100%", alignItems: "center", justifyContent: "center" },
   dish: { width: "78%", height: "22%", borderRadius: 8, backgroundColor: "#d4b483", borderWidth: 1, borderColor: "#f3ead8" },
