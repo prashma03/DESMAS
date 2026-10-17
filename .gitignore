@@ -5,6 +5,7 @@ dist
 .DS_Store
 .vite
 .expo
+assets/intro-cache
 web-build
 .tmp-mockup
 index.html

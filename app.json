@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "default",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
     "scheme": "desmas",
     "ios": {
       "supportsTablet": true,
@@ -19,6 +20,9 @@
     },
     "plugins": [
       "expo-video"
-    ]
+    ],
+    "experiments": {
+      "baseUrl": "/DESMAS"
+    }
   }
 }
