@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import type { EarthDelay } from "../findings";
+import { communicationAutonomy } from "../kit/autonomy";
 import { kitFreshness, type KitEvent, type KitReading, type KitSource, type LinkStatus } from "../kit/types";
 import { useScreen } from "../layout";
 import { board } from "../serial/board";
 import { colors } from "../theme";
 import { AiMonitor } from "./AIMonitor";
+import { MarsScenarioPanel } from "./ScenarioPanel";
 import {
   batteryEstimate,
   DayBadge,
@@ -241,6 +243,7 @@ export function MarsPage({
   const solar = solarOf(reading.dark);
   const battery = batteryEstimate("mars", reading.dark);
   const storm = stormLabel(reading.dark);
+  const autonomy = communicationAutonomy({ world: "mars", reading, mars: delay });
   const oneWay = delay ? `${delay.oneWayMin.toFixed(1)} min` : "3 to 22 min";
   const linkLine = delay ? `Earth · ${delay.oneWayMin.toFixed(1)} min one way today` : "Earth · up to 22 min one way";
   const thick = reading.dark >= 30;
@@ -414,11 +417,21 @@ export function MarsPage({
           />
         </View>
         <Split>
-          <DelayCard now={Date.now()} oneWayMin={delay?.oneWayMin} roundTripMin={delay?.roundTripMin} au={delay?.au} />
+          <DelayCard
+            now={Date.now()}
+            oneWayMin={delay?.oneWayMin}
+            roundTripMin={delay?.roundTripMin}
+            au={delay?.au}
+            mode={autonomy.mode}
+            summary={autonomy.summary}
+          />
           <View nativeID="faults" style={styles.slot}>
             <FaultLog events={events} />
           </View>
         </Split>
+        <View nativeID="scenario">
+          <MarsScenarioPanel />
+        </View>
         <AiMonitor world="mars" reading={reading} source={source} delay={delay ?? undefined} />
       </Lower>
     </Page>

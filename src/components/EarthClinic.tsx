@@ -6,6 +6,7 @@ import { stageOf } from "../findings";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
 import { AiMonitor } from "./AIMonitor";
+import { ScenarioPanel } from "./ScenarioPanel";
 import { batteryEstimate, clock, feedMessage, Lower, mono, sans, solarOf, Sparkline } from "./dashboard";
 
 const LED = ["#4ADE80", "#60A5FA", "#FACC15", "#F87171"] as const;
@@ -81,6 +82,9 @@ export function ClinicLower({
             <View nativeID="feed" style={styles.slot}>
               <ClinicFeed events={events} />
             </View>
+          </View>
+          <View nativeID="scenario">
+            <ScenarioPanel />
           </View>
           <AiMonitor world="earth" reading={reading} source={source} />
         </View>

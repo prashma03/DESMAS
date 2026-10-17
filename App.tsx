@@ -11,6 +11,7 @@ import { kitFreshness, type WorldId } from "./src/kit/types";
 import { board } from "./src/serial/board";
 import { colors, styles as shell } from "./src/theme";
 import { API } from "./src/api";
+import { publishMarsDelay } from "./src/kit/autonomy";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
 import { useScreen } from "./src/layout";
@@ -65,12 +66,16 @@ export default function App() {
         .then((d: { oneWayMin?: number; roundTripMin?: number; oneWaySeconds?: number; au?: number }) => {
           if (stop) return;
           if (typeof d.oneWayMin === "number" && typeof d.roundTripMin === "number") {
-            setDelay({ oneWayMin: d.oneWayMin, roundTripMin: d.roundTripMin, au: d.au });
+            const next = { oneWayMin: d.oneWayMin, roundTripMin: d.roundTripMin, au: d.au };
+            publishMarsDelay(next);
+            setDelay(next);
             return;
           }
           if (!d.oneWaySeconds) return;
           const oneWayMin = d.oneWaySeconds / 60;
-          setDelay({ oneWayMin, roundTripMin: oneWayMin * 2, au: d.au });
+          const next = { oneWayMin, roundTripMin: oneWayMin * 2, au: d.au };
+          publishMarsDelay(next);
+          setDelay(next);
         })
         .catch(() => {
           /* server optional */

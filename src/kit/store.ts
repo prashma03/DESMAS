@@ -1,6 +1,8 @@
 import { parseMessage } from "../serial/parse";
+import { IncidentLog } from "./incidents";
 import { eventsFromTransition, readingAt, SIM_TICK_MS } from "./simulate";
 import type { KitEvent, KitReading, KitSource, LinkStatus } from "./types";
+import { playIncidentWarning } from "./warningSound";
 
 const HISTORY = 60;
 const LINES = 6;
@@ -23,6 +25,7 @@ type State = {
 let nextEventId = 1;
 let prev: KitReading | null = null;
 let started = Date.now();
+const incidents = new IncidentLog();
 
 function seed(): State {
   const reading = readingAt(0);
@@ -97,6 +100,15 @@ export const kitStore = {
   getSnapshot(): State {
     return state;
   },
+  getIncidentHistory(windowSeconds?: number) {
+    const hist = incidents.getHistory(windowSeconds);
+    return {
+      ...hist,
+      arduino_connected: state.link === "live" || state.link === "connected",
+      arduino_stale: state.link === "stale" || state.link === "disconnected",
+      kit_source: state.source,
+    };
+  },
   /** Port chosen, not open yet. Simulation pauses so it cannot race the board. */
   markConnecting() {
     if (state.link === "live" || state.link === "connected") return;
@@ -111,6 +123,7 @@ export const kitStore = {
   markStale() {
     if (state.link !== "live") return;
     state = { ...state, link: "stale" };
+    incidents.markSerialGap(Date.now(), "LIVE ARDUINO", "SERIAL_STALE", "Serial silent >3s (stale)");
     emit();
   },
   /** USB dropped or the stream stopped. Keep the last board reading and do not start the simulation over it. */
@@ -120,6 +133,7 @@ export const kitStore = {
       emit();
       return;
     }
+    incidents.markSerialGap(Date.now(), "LIVE ARDUINO", "SERIAL_DISCONNECT", notice || "Arduino disconnected");
     state = {
       ...state,
       link: "disconnected",
@@ -202,6 +216,8 @@ export const kitStore = {
       seq: state.seq + 1,
       notice: "",
     };
+    const added = incidents.pushReading(parsed.reading, Date.now(), "LIVE ARDUINO");
+    for (const evt of added) playIncidentWarning(evt.severity);
     emit();
     return true;
   },

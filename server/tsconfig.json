@@ -6,9 +6,22 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "rootDir": ".."
   },
-  "include": ["src", "../src/findings.ts", "../src/kit/types.ts"]
+  "include": [
+    "src",
+    "../src/findings.ts",
+    "../src/kit/types.ts",
+    "../src/kit/sensorState.ts",
+    "../src/kit/autonomy.ts",
+    "../src/kit/incidents.ts",
+    "../src/worlds.ts",
+    "../src/sim/shedModel.ts",
+    "../src/sim/darknessIndex.ts",
+    "../src/sim/powerDay.ts",
+    "../src/sim/marsTau.ts"
+  ]
 }
