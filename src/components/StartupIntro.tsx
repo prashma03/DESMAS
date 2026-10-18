@@ -2,7 +2,7 @@ import { useEventListener } from "expo";
 import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { advanceIntro, type IntroAdvance, type IntroPhase } from "../introSession";
+import { advanceIntro, introSoundPrompt, type IntroAdvance, type IntroPhase } from "../introSession";
 
 const VIDEO_1 = require("../../assets/Videoes/vid-1.mp4") as number;
 const VIDEO_2 = require("../../assets/Videoes/vid-2.mp4") as number;
@@ -20,6 +20,8 @@ export function StartupIntro({ onComplete }: Props) {
   const [phase, setPhase] = useState<IntroPhase>("video1");
   const [showSecond, setShowSecond] = useState(false);
   const [needsGesture, setNeedsGesture] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
   const phaseRef = useRef<IntroPhase>("video1");
   const finished = useRef(false);
   const playingRef = useRef(false);
@@ -28,6 +30,7 @@ export function StartupIntro({ onComplete }: Props) {
   const revealed = useRef(false);
   const autoPlayed = useRef(false);
   const playedOnce = useRef(false);
+  const soundOnRef = useRef(false);
   const opacity = useRef(new Animated.Value(1)).current;
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -96,7 +99,7 @@ export function StartupIntro({ onComplete }: Props) {
     }
     if (player.status !== "readyToPlay") return;
     autoPlayed.current = true;
-    tryPlay(player, false);
+    tryPlay(player, false, soundOnRef.current);
   };
 
   useEventListener(player1, "statusChange", ({ status }) => {
@@ -112,6 +115,7 @@ export function StartupIntro({ onComplete }: Props) {
   useEventListener(player1, "playingChange", ({ isPlaying }) => {
     if (phaseRef.current !== "video1") return;
     playingRef.current = isPlaying;
+    setPlaying(isPlaying);
     if (isPlaying) {
       playedOnce.current = true;
       gestureRef.current = false;
@@ -121,6 +125,7 @@ export function StartupIntro({ onComplete }: Props) {
   useEventListener(player2, "playingChange", ({ isPlaying }) => {
     if (phaseRef.current !== "video2") return;
     playingRef.current = isPlaying;
+    setPlaying(isPlaying);
     if (isPlaying) {
       playedOnce.current = true;
       gestureRef.current = false;
@@ -134,6 +139,7 @@ export function StartupIntro({ onComplete }: Props) {
     const other = phase === "video1" ? player2 : player1;
     pause(other);
     playingRef.current = false;
+    setPlaying(false);
     autoPlayed.current = false;
     playedOnce.current = false;
     if (player.status === "error") {
@@ -181,7 +187,7 @@ export function StartupIntro({ onComplete }: Props) {
     const sub = AppState.addEventListener("change", (next) => {
       if (next !== "active" || finished.current || gestureRef.current) return;
       const current = phaseRef.current === "video1" ? player1Ref.current : phaseRef.current === "video2" ? player2Ref.current : null;
-      if (current && !current.playing) tryPlay(current, false);
+      if (current && !current.playing) tryPlay(current, false, soundOnRef.current);
     });
     return () => sub.remove();
   }, []);
@@ -215,7 +221,23 @@ export function StartupIntro({ onComplete }: Props) {
     };
   }, []);
 
-  const activePlayer = phase === "video2" ? player2 : player1;
+  const soundPrompt = introSoundPrompt(soundOn, playing, needsGesture);
+
+  const requestSound = () => {
+    soundOnRef.current = true;
+    setSoundOn(true);
+    gestureRef.current = false;
+    setNeedsGesture(false);
+    const player = phaseRef.current === "video2" ? player2Ref.current : player1Ref.current;
+    player.loop = false;
+    player.muted = false;
+    player.volume = 1;
+    try {
+      player.play();
+    } catch {
+      // Released players throw. Skip intro remains available.
+    }
+  };
 
   return (
     <Animated.View accessibilityViewIsModal pointerEvents="auto" style={[styles.fill, { opacity }]}>
@@ -247,18 +269,14 @@ export function StartupIntro({ onComplete }: Props) {
           surfaceType="textureView"
         />
       </View>
-      {needsGesture ? (
+      {soundPrompt ? (
         <View pointerEvents="box-none" style={styles.playWrap}>
           <Pressable
-            accessibilityLabel="Play intro"
-            onPress={() => {
-              gestureRef.current = false;
-              setNeedsGesture(false);
-              tryPlay(activePlayer, true);
-            }}
+            accessibilityLabel={soundPrompt === "play" ? "Play intro" : "Enable sound"}
+            onPress={requestSound}
             style={styles.play}
           >
-            <Text style={styles.playTxt}>Play</Text>
+            <Text style={styles.playTxt}>{soundPrompt === "play" ? "Play intro" : "Enable sound"}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -276,9 +294,10 @@ function preparePlayer(player: VideoPlayer) {
   player.staysActiveInBackground = false;
 }
 
-function tryPlay(player: VideoPlayer, withSound: boolean) {
+function tryPlay(player: VideoPlayer, withSound: boolean, soundAlreadyOn = false) {
   player.loop = false;
-  player.muted = Platform.OS === "web" ? !withSound : false;
+  player.muted = Platform.OS === "web" ? !(withSound || soundAlreadyOn) : false;
+  player.volume = 1;
   try {
     player.play();
   } catch {

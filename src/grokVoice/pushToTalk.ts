@@ -9,6 +9,7 @@ import {
 } from "../kit/sensorState";
 import { communicationAutonomy, publishedMarsDelay } from "../kit/autonomy";
 import { setGrokPlaybackBusy } from "./playbackGate";
+import { voiceNetworkError } from "./voiceEndpoint";
 import type { WorldId } from "../kit/types";
 import { floatToPcm16Base64, resampleF32, TARGET_RATE } from "./pcm";
 
@@ -85,7 +86,15 @@ function isWeb() {
 }
 
 async function mintToken(): Promise<string> {
-  const res = await fetch(`${API}/api/realtime/token`, { method: "POST" });
+  const url = `${API}/api/realtime/token`;
+  const pageOrigin = typeof location !== "undefined" ? location.origin : "";
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST" });
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : "network error";
+    throw new Error(voiceNetworkError(url, pageOrigin, cause));
+  }
   const data = (await res.json().catch(() => null)) as {
     value?: string;
     message?: string;

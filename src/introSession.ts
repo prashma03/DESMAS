@@ -7,6 +7,16 @@ export function advanceIntro(phase: IntroPhase, reason: IntroAdvance): IntroPhas
   return "complete";
 }
 
+export type IntroSoundPrompt = "play" | "enable";
+
+/** Initial playback stays silent. A prompt appears only until the viewer asks for sound. */
+export function introSoundPrompt(soundOn: boolean, playing: boolean, needsGesture: boolean): IntroSoundPrompt | null {
+  if (soundOn) return null;
+  if (playing) return "enable";
+  if (needsGesture) return "play";
+  return null;
+}
+
 /**
  * Lives for this JavaScript runtime only.
  * A browser refresh or a new native process loads the module again and plays the intro.

@@ -23,14 +23,20 @@ const port = Number(process.env.PORT ?? 8787);
 const XAI_TTS = "https://api.x.ai/v1/tts";
 const TTS_MAX_CHARS = 4000;
 
+const hostedOrigins = (process.env.CORS_ORIGINS ?? "https://prashma03.github.io")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function originAllowed(origin: string | undefined) {
+  if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return hostedOrigins.includes(origin);
+}
+
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-        cb(null, true);
-        return;
-      }
-      cb(null, false);
+      cb(null, originAllowed(origin));
     },
   }),
 );

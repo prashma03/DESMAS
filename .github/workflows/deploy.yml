@@ -34,6 +34,8 @@ jobs:
         run: npm ci
 
       - name: Export Expo web app
+        # Voice is baked in here. Pages cannot run Express. Set EXPO_PUBLIC_API_URL
+        # to the HTTPS address of a deployed server or the public site will not reach voice.
         run: npm run export:web
 
       - name: Keep underscore asset folders
