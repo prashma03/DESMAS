@@ -7,6 +7,23 @@ import { advanceIntro, type IntroAdvance, type IntroPhase } from "../introSessio
 const VIDEO_1 = require("../../assets/Videoes/vid-1.mp4") as number;
 const VIDEO_2 = require("../../assets/Videoes/vid-2.mp4") as number;
 
+function silenceMedia() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return;
+  document.querySelectorAll("video, audio").forEach((node) => {
+    if (!(node instanceof HTMLMediaElement)) return;
+    node.loop = false;
+    node.muted = true;
+    node.volume = 0;
+    try {
+      node.pause();
+    } catch {
+      // A detached element can throw.
+    }
+  });
+}
+
+silenceMedia();
+
 const sans = Platform.OS === "web" ? "Geist, sans-serif" : undefined;
 const REVEAL_MS = 720;
 const READY_WAIT_MS = 900;
@@ -96,7 +113,7 @@ export function StartupIntro({ onComplete }: Props) {
     }
     if (player.status !== "readyToPlay") return;
     autoPlayed.current = true;
-    tryPlay(player, false);
+    tryPlay(player);
   };
 
   useEventListener(player1, "statusChange", ({ status }) => {
@@ -181,7 +198,7 @@ export function StartupIntro({ onComplete }: Props) {
     const sub = AppState.addEventListener("change", (next) => {
       if (next !== "active" || finished.current || gestureRef.current) return;
       const current = phaseRef.current === "video1" ? player1Ref.current : phaseRef.current === "video2" ? player2Ref.current : null;
-      if (current && !current.playing) tryPlay(current, false);
+      if (current && !current.playing) tryPlay(current);
     });
     return () => sub.remove();
   }, []);
@@ -254,7 +271,7 @@ export function StartupIntro({ onComplete }: Props) {
             onPress={() => {
               gestureRef.current = false;
               setNeedsGesture(false);
-              tryPlay(activePlayer, true);
+              tryPlay(activePlayer);
             }}
             style={styles.play}
           >
@@ -271,14 +288,15 @@ export function StartupIntro({ onComplete }: Props) {
 
 function preparePlayer(player: VideoPlayer) {
   player.loop = false;
-  player.muted = Platform.OS === "web";
-  player.volume = 1;
+  player.muted = true;
+  player.volume = 0;
   player.staysActiveInBackground = false;
 }
 
-function tryPlay(player: VideoPlayer, withSound: boolean) {
+function tryPlay(player: VideoPlayer) {
   player.loop = false;
-  player.muted = Platform.OS === "web" ? !withSound : false;
+  player.muted = true;
+  player.volume = 0;
   try {
     player.play();
   } catch {

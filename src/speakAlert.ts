@@ -11,15 +11,55 @@ type SpeechWin = {
   speechSynthesis?: { cancel: () => void; speak: (u: { text: string }) => void };
 };
 
-let currentAudio: { pause: () => void } | null = null;
+type TrackedAudio = {
+  pause: () => void;
+  loop?: boolean;
+  muted?: boolean;
+  volume?: number;
+};
+
+const TRACKED = "__desmasAudio";
+
+function trackedAudio(): TrackedAudio[] {
+  const bag = globalThis as Record<string, TrackedAudio[] | undefined>;
+  if (!bag[TRACKED]) bag[TRACKED] = [];
+  return bag[TRACKED];
+}
+
+let currentAudio: TrackedAudio | null = null;
 let objectUrl: string | null = null;
 
 function win(): SpeechWin {
   return globalThis as unknown as SpeechWin;
 }
 
-function stopPlayback() {
-  currentAudio?.pause();
+function hushElements() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("audio, video").forEach((node) => {
+    if (!(node instanceof HTMLMediaElement)) return;
+    node.loop = false;
+    node.muted = true;
+    node.volume = 0;
+    try {
+      node.pause();
+    } catch {
+      // A detached element can throw.
+    }
+  });
+}
+
+export function stopPlayback() {
+  for (const audio of trackedAudio()) {
+    audio.loop = false;
+    audio.muted = true;
+    audio.volume = 0;
+    try {
+      audio.pause();
+    } catch {
+      // A released element can throw.
+    }
+  }
+  (globalThis as Record<string, TrackedAudio[] | undefined>)[TRACKED] = [];
   currentAudio = null;
   if (objectUrl) {
     if (typeof URL !== "undefined" && "revokeObjectURL" in URL) {
@@ -27,7 +67,12 @@ function stopPlayback() {
     }
     objectUrl = null;
   }
-  win().speechSynthesis?.cancel();
+  try {
+    win().speechSynthesis?.cancel();
+  } catch {
+    // The browser can throw if speech synthesis is already idle.
+  }
+  hushElements();
 }
 
 function speakBrowser(text: string): boolean {
@@ -45,6 +90,7 @@ async function playGrokAudio(blob: Blob) {
   objectUrl = URL.createObjectURL(blob);
   const audio = new AudioCtor(objectUrl);
   currentAudio = audio;
+  trackedAudio().push(audio);
   audio.addEventListener("ended", stopPlayback);
   await audio.play();
 }
@@ -76,3 +122,5 @@ export async function speakAlert(text: string): Promise<SpeakSource> {
     throw new Error("speech_unavailable");
   }
 }
+
+stopPlayback();

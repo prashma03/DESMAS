@@ -18,8 +18,16 @@ export function voiceSupported() {
 }
 
 export function stopVoice() {
-  Speech.stop();
-  webSynth()?.cancel();
+  try {
+    Speech.stop();
+  } catch {
+    // The native module can throw after a player is already released.
+  }
+  try {
+    webSynth()?.cancel();
+  } catch {
+    // The browser can throw if speech synthesis is already idle.
+  }
 }
 
 export function speakAlert(
@@ -48,3 +56,5 @@ export function speakAlert(
       onStatus({ text: "Could not speak the alert. Try another browser or device.", error: true }),
   });
 }
+
+stopVoice();
