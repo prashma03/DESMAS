@@ -5,7 +5,7 @@ using System.Drawing.Imaging;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-public static class CleanPlate {
+public static class CleanPlate5 {
   public static string Run(string path, string outPath, float yScale) {
     using (Bitmap src = new Bitmap(path)) {
       int width = src.Width;
@@ -22,8 +22,8 @@ public static class CleanPlate {
         new int[] {400, 95, 630, 168, 520, 122, 38},
         new int[] {260, 190, 390, 250, 320, 208, 40},
         new int[] {430, 175, 610, 255, 490, 205, 40},
-        new int[] {600, 300, 760, 365, 650, 318, 34},
-        new int[] {600, 300, 760, 365, 680, 330, 34},
+        new int[] {610, 305, 745, 358, 650, 318, 28},
+        new int[] {610, 305, 745, 358, 680, 330, 28},
         new int[] {735, 95, 970, 170, 780, 115, 36},
         new int[] {735, 95, 970, 170, 760, 140, 36},
         new int[] {20, 400, 330, 482, 110, 425, 42},
@@ -31,47 +31,74 @@ public static class CleanPlate {
         new int[] {570, 400, 980, 482, 700, 425, 40},
         new int[] {570, 400, 980, 482, 800, 445, 40}
       };
+      System.Text.StringBuilder log = new System.Text.StringBuilder();
       for (int j = 0; j < jobs.Length; j++) {
         int[] job = jobs[j];
         int y0 = Scale(job[1], yScale, height);
         int y1 = Scale(job[3], yScale, height);
         int sy = Scale(job[5], yScale, height);
-        Flood(bytes, mask, stride, width, height, job[4], sy, job[0], y0, job[2], y1, job[6]);
-      }
-      bool[] grown = (bool[])mask.Clone();
-      for (int y = 2; y < height - 2; y++) {
-        for (int x = 2; x < width - 2; x++) {
-          if (!mask[y * width + x]) continue;
-          for (int dy = -2; dy <= 2; dy++) {
-            for (int dx = -2; dx <= 2; dx++) grown[(y + dy) * width + (x + dx)] = true;
+        bool[] local = new bool[width * height];
+        Flood(bytes, local, stride, width, height, job[4], sy, job[0], y0, job[2], y1, job[6]);
+        int minx = width, miny = height, maxx = 0, maxy = 0, hits = 0;
+        for (int y = y0; y <= y1; y++) {
+          for (int x = job[0]; x <= job[2]; x++) {
+            if (!local[y * width + x]) continue;
+            hits++;
+            if (x < minx) minx = x;
+            if (y < miny) miny = y;
+            if (x > maxx) maxx = x;
+            if (y > maxy) maxy = y;
           }
         }
+        if (hits < 30) continue;
+        minx = Math.Max(1, minx - 16);
+        miny = Math.Max(1, miny - 14);
+        maxx = Math.Min(width - 2, maxx + 16);
+        maxy = Math.Min(height - 2, maxy + 14);
+        log.Append(minx).Append(",").Append(miny).Append(" ").Append(maxx - minx).Append("x").Append(maxy - miny).Append("; ");
+        for (int y = miny; y <= maxy; y++) {
+          for (int x = minx; x <= maxx; x++) mask[y * width + x] = true;
+        }
       }
-      mask = grown;
       byte[] cur = (byte[])bytes.Clone();
-      byte[] nxt = (byte[])bytes.Clone();
-      int[] ox = new int[] {1, -1, 0, 0};
-      int[] oy = new int[] {0, 0, 1, -1};
-      for (int iter = 0; iter < 240; iter++) {
-        for (int y = 1; y < height - 1; y++) {
-          for (int x = 1; x < width - 1; x++) {
-            if (!mask[y * width + x]) continue;
-            int rs = 0, gs = 0, bs = 0;
-            for (int d = 0; d < 4; d++) {
-              int i = (y + oy[d]) * stride + (x + ox[d]) * 3;
-              bs += cur[i];
-              gs += cur[i + 1];
-              rs += cur[i + 2];
-            }
-            int o = y * stride + x * 3;
-            nxt[o] = (byte)(bs / 4);
-            nxt[o + 1] = (byte)(gs / 4);
-            nxt[o + 2] = (byte)(rs / 4);
+      for (int y = 1; y < height - 1; y++) {
+        for (int x = 1; x < width - 1; x++) {
+          if (!mask[y * width + x]) continue;
+          int rs = 0, gs = 0, bs = 0, ws = 0;
+          for (int yy = y; yy >= 0; yy--) {
+            if (mask[yy * width + x]) continue;
+            int i = yy * stride + x * 3;
+            int wgt = 1024 / (y - yy);
+            bs += cur[i] * wgt; gs += cur[i + 1] * wgt; rs += cur[i + 2] * wgt; ws += wgt;
+            break;
           }
+          for (int yy = y; yy < height; yy++) {
+            if (mask[yy * width + x]) continue;
+            int i = yy * stride + x * 3;
+            int wgt = 1024 / (yy - y);
+            bs += cur[i] * wgt; gs += cur[i + 1] * wgt; rs += cur[i + 2] * wgt; ws += wgt;
+            break;
+          }
+          for (int xx = x; xx >= 0; xx--) {
+            if (mask[y * width + xx]) continue;
+            int i = y * stride + xx * 3;
+            int wgt = 1024 / (x - xx);
+            bs += cur[i] * wgt; gs += cur[i + 1] * wgt; rs += cur[i + 2] * wgt; ws += wgt;
+            break;
+          }
+          for (int xx = x; xx < width; xx++) {
+            if (mask[y * width + xx]) continue;
+            int i = y * stride + xx * 3;
+            int wgt = 1024 / (xx - x);
+            bs += cur[i] * wgt; gs += cur[i + 1] * wgt; rs += cur[i + 2] * wgt; ws += wgt;
+            break;
+          }
+          if (ws == 0) continue;
+          int o = y * stride + x * 3;
+          cur[o] = (byte)(bs / ws);
+          cur[o + 1] = (byte)(gs / ws);
+          cur[o + 2] = (byte)(rs / ws);
         }
-        byte[] swap = cur;
-        cur = nxt;
-        nxt = swap;
       }
       Marshal.Copy(cur, 0, data.Scan0, cur.Length);
       src.UnlockBits(data);
@@ -85,7 +112,7 @@ public static class CleanPlate {
       src.Save(outPath, jpeg, ep);
       int count = 0;
       for (int i = 0; i < mask.Length; i++) if (mask[i]) count++;
-      return "masked " + count;
+      return "masked " + count + " " + log.ToString();
     }
   }
 
