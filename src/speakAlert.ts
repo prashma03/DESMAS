@@ -35,7 +35,7 @@ function win(): SpeechWin {
 
 function hushElements() {
   if (typeof document === "undefined") return;
-  document.querySelectorAll("audio, video").forEach((node) => {
+  document.querySelectorAll("audio").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
     node.loop = false;
     node.muted = true;

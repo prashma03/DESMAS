@@ -9,7 +9,7 @@ const VIDEO_2 = require("../../assets/Videoes/vid-2.mp4") as number;
 
 function silenceMedia() {
   if (Platform.OS !== "web" || typeof document === "undefined") return;
-  document.querySelectorAll("video, audio").forEach((node) => {
+  document.querySelectorAll("audio").forEach((node) => {
     if (!(node instanceof HTMLMediaElement)) return;
     node.loop = false;
     node.muted = true;
@@ -45,7 +45,7 @@ export function StartupIntro({ onComplete }: Props) {
   const revealed = useRef(false);
   const autoPlayed = useRef(false);
   const playedOnce = useRef(false);
-  const opacity = useRef(new Animated.Value(1)).current;
+  const cover = useRef(new Animated.Value(0)).current;
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -69,8 +69,8 @@ export function StartupIntro({ onComplete }: Props) {
       onCompleteRef.current();
     };
     const backup = setTimeout(finish, duration + 180);
-    Animated.timing(opacity, {
-      toValue: 0,
+    Animated.timing(cover, {
+      toValue: 1,
       duration,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -215,6 +215,8 @@ export function StartupIntro({ onComplete }: Props) {
         video.preload = "auto";
         video.controls = false;
         video.playsInline = true;
+        video.muted = false;
+        video.volume = 1;
       });
     };
     hideCursor();
@@ -235,33 +237,31 @@ export function StartupIntro({ onComplete }: Props) {
   const activePlayer = phase === "video2" ? player2 : player1;
 
   return (
-    <Animated.View accessibilityViewIsModal pointerEvents="auto" style={[styles.fill, { opacity }]}>
-      <View pointerEvents="none" style={styles.layer}>
+    <View accessibilityViewIsModal pointerEvents="auto" style={styles.fill}>
+      <View pointerEvents="none" style={[styles.layer, phase === "video2" ? styles.front : null]}>
         <VideoView
           player={player2}
           style={styles.video}
-          contentFit="contain"
+          contentFit="cover"
           nativeControls={false}
           playsInline
           allowsFullscreen={false}
           allowsPictureInPicture={false}
-          surfaceType="textureView"
           onFirstFrameRender={() => {
             frameReady.current = true;
             if (phaseRef.current === "video2") setShowSecond(true);
           }}
         />
       </View>
-      <View pointerEvents="none" style={[styles.layer, showSecond ? styles.covered : null]}>
+      <View pointerEvents="none" style={[styles.layer, phase === "video2" ? styles.covered : styles.front]}>
         <VideoView
           player={player1}
           style={styles.video}
-          contentFit="contain"
+          contentFit="cover"
           nativeControls={false}
           playsInline
           allowsFullscreen={false}
           allowsPictureInPicture={false}
-          surfaceType="textureView"
         />
       </View>
       {needsGesture ? (
@@ -282,21 +282,22 @@ export function StartupIntro({ onComplete }: Props) {
       <Pressable accessibilityLabel="Skip intro" onPress={() => goRef.current("skip")} style={styles.skip}>
         <Text style={styles.skipTxt}>Skip intro</Text>
       </Pressable>
-    </Animated.View>
+      <Animated.View pointerEvents="none" style={[styles.fade, { opacity: cover }]} />
+    </View>
   );
 }
 
 function preparePlayer(player: VideoPlayer) {
   player.loop = false;
-  player.muted = true;
-  player.volume = 0;
+  player.muted = false;
+  player.volume = 1;
   player.staysActiveInBackground = false;
 }
 
 function tryPlay(player: VideoPlayer) {
   player.loop = false;
-  player.muted = true;
-  player.volume = 0;
+  player.muted = false;
+  player.volume = 1;
   try {
     player.play();
   } catch {
@@ -336,7 +337,13 @@ const styles = StyleSheet.create({
     zIndex: 0,
     backgroundColor: "#000",
   },
-  covered: { opacity: 0 },
+  covered: { opacity: 0, zIndex: 0 },
+  front: { zIndex: 1 },
+  fade: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
+    backgroundColor: "#000",
+  },
   video: {
     width: "100%",
     height: "100%",
