@@ -51,6 +51,16 @@ export function StartupIntro({ onComplete }: Props) {
 
   const player1 = useVideoPlayer(VIDEO_1, preparePlayer);
   const player2 = useVideoPlayer(VIDEO_2, preparePlayer);
+
+  useEffect(() => {
+    pause(player1);
+    pause(player2);
+    silenceMedia();
+    if (!finished.current) {
+      finished.current = true;
+      onCompleteRef.current();
+    }
+  }, [player1, player2]);
   const player1Ref = useRef(player1);
   const player2Ref = useRef(player2);
   player1Ref.current = player1;
@@ -297,11 +307,7 @@ function tryPlay(player: VideoPlayer) {
   player.loop = false;
   player.muted = true;
   player.volume = 0;
-  try {
-    player.play();
-  } catch {
-    // Released players throw. The skip control remains available.
-  }
+  pause(player);
 }
 
 function pause(player: VideoPlayer) {
