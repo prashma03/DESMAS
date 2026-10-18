@@ -320,13 +320,21 @@ export function MarsPage({
   const onCount = reading.leds.filter((v) => v > 0).length;
   const clearSky = reading.dark < 30;
   const active = colors.green;
-  const cover = { backgroundColor: "rgba(10,8,6,0.96)" as const, zIndex: 5 };
+  const cover = { backgroundColor: "rgba(10,8,6,1)" as const, zIndex: 5 };
+  /** Image pixels of the words painted into the clear plate, so the live card hides that copy. */
+  const plate = (x: number, y: number, w: number, h: number) => ({
+    ...cover,
+    left: `${(x / 1024) * 100}%` as const,
+    top: `${(y / 491) * 100}%` as const,
+    width: `${(w / 1024) * 100}%` as const,
+    minHeight: `${(h / 491) * 100}%` as const,
+  });
   const tags = [
-    { title: "Comms tower", line: systemStatus(reading.leds[1], "ON · LINK TO RELAY SHIP", "OFF"), color: reading.leds[1] === 2 ? colors.gold : active, on: reading.leds[1] > 0, style: { ...cover, left: "38%" as const, top: "14%" as const, minWidth: 168 } },
-    { title: "Science lab", line: on(2) ? "ON" : "OFF · SAVING POWER", color: active, on: on(2), style: { ...cover, left: "18%" as const, top: "42%" as const, minWidth: 156 } },
-    { title: "Hab · life support", line: reading.alarm ? `ALERT · HUMIDITY ${Math.round(reading.hum)}%` : on(0) ? `ON · HUMIDITY ${Math.round(reading.hum)}%` : "OFF", color: reading.alarm ? colors.alert : active, on: reading.alarm ? true : on(0), style: { ...cover, left: "39%" as const, top: "34%" as const, minWidth: 168 } },
-    { title: "Comfort dome", line: on(3) ? "ON" : "OFF · SAVING POWER", color: active, on: on(3), style: { ...cover, left: "63%" as const, top: "58%" as const, minWidth: 156 } },
-    { title: "Solar arrays", line: thick ? `DUST · ${solar}%` : `CHARGING · ${solar}%`, color: colors.gold, on: true, style: { ...cover, right: "7%" as const, top: "16%" as const, minWidth: 132 } },
+    { title: "Comms tower", line: systemStatus(reading.leds[1], "ON · LINK TO RELAY SHIP", "OFF"), color: reading.leds[1] === 2 ? colors.gold : active, on: reading.leds[1] > 0, style: plate(409, 89, 180, 72) },
+    { title: "Science lab", line: on(2) ? "ON" : "OFF · SAVING POWER", color: active, on: on(2), style: plate(275, 185, 130, 72) },
+    { title: "Hab · life support", line: reading.alarm ? `ALERT · HUMIDITY ${Math.round(reading.hum)}%` : on(0) ? `ON · HUMIDITY ${Math.round(reading.hum)}%` : "OFF", color: reading.alarm ? colors.alert : active, on: reading.alarm ? true : on(0), style: plate(420, 178, 155, 74) },
+    { title: "Comfort dome", line: on(3) ? "ON" : "OFF · SAVING POWER", color: active, on: on(3), style: plate(590, 286, 180, 74) },
+    { title: "Solar arrays", line: thick ? `DUST · ${solar}%` : `CHARGING · ${solar}%`, color: colors.gold, on: true, style: plate(708, 96, 150, 74) },
   ];
   const phase = clearSky ? "CLEAR SKY" : `DUST STORM · ${storm.toUpperCase()}`;
   const phaseDetail = clearSky
@@ -402,21 +410,21 @@ export function MarsPage({
           accessibilityLabel="Mars future base in a dust storm"
         />
         <SceneScanOverlay tone="mars" />
-        <View {...marked({ marsPhase: "1" })} style={[styles.phaseRow, phone ? styles.phaseRowPhone : null]}>
-          <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm, phone ? styles.pillPhone : null]}>
+        <View {...marked({ marsPhase: "1" })} style={[styles.phaseRow, phone ? styles.phaseRowPhone : styles.phaseRowPlate]}>
+          <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm, phone ? styles.pillPhone : clearSky ? styles.pillCoverClear : styles.pillCoverStorm]}>
             <Text style={[styles.pillTxt, phone ? styles.pillTxtPhone : null, { color: clearSky ? colors.ok : "#E7B08A" }]}>{phase}</Text>
           </View>
-          <View style={[styles.pill, phone ? styles.pillPhone : null]}>
+          <View style={[styles.pill, phone ? styles.pillPhone : styles.pillCover]}>
             <Text style={[styles.pillDetail, phone ? styles.pillTxtPhone : null]} numberOfLines={2}>{phaseDetail}</Text>
           </View>
         </View>
         {phone ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
-        <View {...marked({ marsTitle: "1" })} style={[styles.titleCard, phone ? styles.titleCardNarrow : null]}>
+        <View {...marked({ marsTitle: "1" })} style={[styles.titleCard, phone ? styles.titleCardNarrow : styles.titleCover]}>
           <Text style={[styles.warmKicker, phone ? styles.kickerPhone : null]}>03 · Mars · surface · crewed</Text>
           <Text style={[styles.title, phone ? styles.titlePhone : null]}>Future base</Text>
         </View>
         {phone ? null : (
-          <View style={styles.advice}>
+          <View style={[styles.advice, styles.adviceCover]}>
             <Text style={styles.warmKicker}>The AI advises this crew</Text>
             <Text style={styles.adviceTxt}>{ADVICE}</Text>
             {fresh.live ? (
@@ -566,6 +574,10 @@ const styles = StyleSheet.create({
     ? { transitionProperty: "opacity", transitionDuration: "900ms", transitionTimingFunction: "ease" }
     : {}) as ImageStyle,
   phaseRow: { position: "absolute", top: 14, left: 14, zIndex: 4, flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: "78%" },
+  phaseRowPlate: { top: "0.8%", left: "2.4%", height: "11%", maxWidth: "62%", alignItems: "stretch", gap: 0 },
+  pillCover: { flexGrow: 1, minHeight: "100%", justifyContent: "center", backgroundColor: "rgba(12,8,6,1)", paddingHorizontal: 14, marginLeft: -10 },
+  pillCoverClear: { flexGrow: 0, minWidth: 168, minHeight: "100%", justifyContent: "center", backgroundColor: "rgba(16,24,14,1)", paddingHorizontal: 14 },
+  pillCoverStorm: { flexGrow: 0, minWidth: 168, minHeight: "100%", justifyContent: "center", backgroundColor: "rgba(42,18,10,1)", paddingHorizontal: 14 },
   pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "rgba(12,8,6,0.96)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
   pillClear: { backgroundColor: "rgba(20,28,18,0.78)" },
   pillStorm: { backgroundColor: "rgba(62,28,16,0.82)", borderColor: "rgba(231,176,138,0.35)" },
@@ -585,6 +597,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(196,96,58,0.45)",
   },
   titleCardNarrow: { left: 10, bottom: 10, maxWidth: "74%", paddingHorizontal: 12, paddingVertical: 8 },
+  titleCover: { left: "1.6%", top: "77%", bottom: 12, width: "24%", maxWidth: "28%", backgroundColor: "rgba(18,8,6,1)" },
+  adviceCover: { right: "2.4%", top: "77%", bottom: 12, width: "42%", maxWidth: "44%", backgroundColor: "rgba(28,10,8,1)" },
   phaseRowPhone: { top: 10, left: 10, right: 10, maxWidth: "100%", flexDirection: "column", alignItems: "flex-start", gap: 6 },
   pillPhone: { maxWidth: "100%", flexShrink: 1 },
   pillTxtPhone: { flexShrink: 1, ...(Platform.OS === "web" ? ({ overflowWrap: "break-word" } as object) : null) },
