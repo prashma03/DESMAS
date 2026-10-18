@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextStyle, type ViewStyle } from "react-native";
 import Svg, { Line, Polyline } from "react-native-svg";
 import type { KitEvent, KitReading } from "../kit/types";
 import { useScreen } from "../layout";
@@ -89,6 +89,7 @@ export function GlassTag({
   on = true,
   style,
   inline,
+  wrap,
 }: {
   title: string;
   line: string;
@@ -96,13 +97,15 @@ export function GlassTag({
   on?: boolean;
   style?: ViewStyle;
   inline?: boolean;
+  /** Let a long status wrap inside a bounded card. Desktop tags leave this off. */
+  wrap?: boolean;
 }) {
   return (
-    <View style={[inline ? styles.tagInline : styles.tag, style]}>
-      <Text style={styles.tagTitle}>{title}</Text>
-      <View style={styles.tagRow}>
+    <View style={[inline ? styles.tagInline : styles.tag, wrap ? styles.tagFill : null, style]}>
+      <Text style={[styles.tagTitle, wrap ? styles.tagTitleWrap : null]}>{title}</Text>
+      <View style={[styles.tagRow, wrap ? styles.tagRowWrap : null]}>
         <View style={[styles.dot, { backgroundColor: on ? color : "#555" }]} />
-        <Text style={[styles.tagLine, { color: on ? color : colors.dim }]}>{line}</Text>
+        <Text style={[styles.tagLine, wrap ? styles.tagLineWrap : null, { color: on ? color : colors.dim }]}>{line}</Text>
       </View>
     </View>
   );
@@ -118,12 +121,26 @@ export function DayBadge({ label, tone = "ok" }: { label: string; tone?: "ok" | 
   );
 }
 
-export function SceneTitle({ kicker, title, style }: { kicker: string; title: string; style?: ViewStyle }) {
+export function SceneTitle({
+  kicker,
+  title,
+  style,
+  titleStyle,
+  fullBleed,
+}: {
+  kicker: string;
+  title: string;
+  style?: ViewStyle;
+  titleStyle?: TextStyle;
+  /** When omitted, narrow screens still stretch the title the way they do today. */
+  fullBleed?: boolean;
+}) {
   const { narrow } = useScreen();
+  const bleed = fullBleed ?? narrow;
   return (
-    <View style={[styles.titleBlock, narrow ? styles.titleBlockNarrow : null, style]}>
+    <View style={[styles.titleBlock, bleed ? styles.titleBlockNarrow : null, style]}>
       <Text style={styles.kicker}>{kicker}</Text>
-      <Text style={[styles.sceneTitle, narrow ? { fontSize: 26 } : null]}>{title}</Text>
+      <Text style={[styles.sceneTitle, narrow ? { fontSize: 26 } : null, titleStyle]}>{title}</Text>
     </View>
   );
 }
@@ -610,8 +627,17 @@ const styles = StyleSheet.create({
   tag: { position: "absolute", ...tagShell },
   tagInline: { alignSelf: "flex-start", flexShrink: 1, ...tagShell },
   tagTitle: { color: colors.ink, fontSize: 13, fontFamily: sans },
+  tagFill: { width: "100%", minWidth: 0, alignSelf: "stretch" },
+  tagTitleWrap: { flexShrink: 1 },
   tagRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  tagRowWrap: { minWidth: 0, flexShrink: 1, alignItems: "flex-start" },
   tagLine: { fontSize: 11, fontFamily: mono, letterSpacing: 0.4, flexShrink: 1 },
+  tagLineWrap: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    ...(Platform.OS === "web" ? ({ overflowWrap: "break-word", wordBreak: "break-word" } as object) : null),
+  },
   dot: { width: 6, height: 6, borderRadius: 3 },
   badge: {
     position: "absolute",

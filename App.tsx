@@ -15,6 +15,92 @@ import { publishMarsDelay } from "./src/kit/autonomy";
 import { useKit } from "./src/useKit";
 import { mono, sans } from "./src/components/dashboard";
 import { useScreen } from "./src/layout";
+const TOPBAR_STYLE_ID = "desmas-topbar-mobile";
+
+/** Phone header only. The desktop top bar keeps its StyleSheet rules. */
+const TOPBAR_MOBILE_CSS = `
+@media (max-width: 767px) {
+  [data-topbar="1"] {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  [data-brand-row="1"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 8px !important;
+  }
+  [data-brand-lock="1"] {
+    flex-shrink: 0 !important;
+  }
+  [data-brand="1"] {
+    letter-spacing: 1.1px !important;
+    font-size: 13px !important;
+    flex-shrink: 0 !important;
+  }
+  [data-sim="1"] {
+    flex-shrink: 1 !important;
+    min-width: 0 !important;
+    max-width: 58% !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  [data-sim-label="1"] {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 10px !important;
+    letter-spacing: 0.3px !important;
+  }
+  [data-nav="1"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  [data-nav-item="1"] {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    min-height: 44px !important;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+    justify-content: center !important;
+  }
+  [data-nav-label="1"] {
+    font-size: 13px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+  }
+  [data-connect="1"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 44px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  [data-connect-label="1"] {
+    font-size: 14px !important;
+    text-align: center !important;
+  }
+}
+`;
+
+if (Platform.OS === "web" && typeof document !== "undefined" && !document.getElementById(TOPBAR_STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = TOPBAR_STYLE_ID;
+  style.textContent = TOPBAR_MOBILE_CSS;
+  document.head.appendChild(style);
+}
+
+function webMark(data: Record<string, string>) {
+  return (Platform.OS === "web" ? { dataSet: data } : {}) as { dataSet?: Record<string, string> };
+}
+
 const NAV: { id: WorldId; label: string }[] = [
   { id: "all", label: "All worlds" },
   { id: "earth", label: "Earth" },
@@ -24,7 +110,8 @@ const NAV: { id: WorldId; label: string }[] = [
 
 export default function App() {
   const kit = useKit();
-  const { compact, narrow } = useScreen();
+  const { compact, narrow, width } = useScreen();
+  const phone = width < 768;
   const [showIntro, setShowIntro] = useState(() => !isIntroComplete());
   const [world, setWorld] = useState<WorldId>("all");
   const [delay, setDelay] = useState<EarthDelay | null>(null);
@@ -98,28 +185,28 @@ export default function App() {
         style={[shell.root, androidTop ? { paddingTop: androidTop } : null]}
       >
       <StatusBar style="light" hidden={showIntro} />
-      <View style={[styles.topbar, compact ? styles.topbarCompact : null]}>
-        <View style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
-          <View style={styles.brand}>
+      <View {...webMark({ topbar: "1" })} style={[styles.topbar, compact ? styles.topbarCompact : null]}>
+        <View {...webMark({ brandRow: "1" })} style={[styles.brandWrap, compact ? styles.brandCompact : null]}>
+          <View {...webMark({ brandLock: "1" })} style={styles.brand}>
             <View style={styles.mark}>
               <View style={styles.markDot} />
             </View>
-            <Text style={styles.brandTxt}>DESMAS</Text>
+            <Text {...webMark({ brand: "1" })} style={styles.brandTxt}>DESMAS</Text>
           </View>
           {compact ? (
-            <View style={[styles.sim, live ? styles.simLive : null, styles.simCompact]}>
+            <View {...webMark({ sim: "1" })} style={[styles.sim, live ? styles.simLive : null, styles.simCompact]}>
               <View style={[styles.simDot, { backgroundColor: live ? colors.ok : fresh.mark === "Stale" ? colors.watch : colors.gold }]} />
-              <Text numberOfLines={1} style={styles.simTxt}>{badge}</Text>
+              <Text {...webMark({ simLabel: "1" })} numberOfLines={1} style={styles.simTxt}>{badge}</Text>
             </View>
           ) : null}
         </View>
-        <View style={[styles.nav, compact ? styles.navCompact : null]}>
+        <View {...webMark({ nav: "1" })} style={[styles.nav, compact ? styles.navCompact : null]}>
           {NAV.map((item) => {
             const on = world === item.id;
-            const label = narrow && item.id === "all" ? "All" : item.label;
+            const label = phone && item.id === "all" ? "All" : item.label;
             return (
-              <Pressable key={item.id} style={[styles.navBtn, compact ? styles.navBtnCompact : null, on ? styles.navOn : null]} onPressIn={() => setWorld(item.id)}>
-                <Text numberOfLines={1} style={[styles.navTxt, compact ? styles.navTxtCompact : null, on ? styles.navTxtOn : null]}>{label}</Text>
+              <Pressable key={item.id} {...webMark({ navItem: "1" })} style={[styles.navBtn, compact ? styles.navBtnCompact : null, on ? styles.navOn : null]} onPressIn={() => setWorld(item.id)}>
+                <Text {...webMark({ navLabel: "1" })} numberOfLines={1} style={[styles.navTxt, compact ? styles.navTxtCompact : null, on ? styles.navTxtOn : null]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -127,10 +214,11 @@ export default function App() {
         {compact ? (
           portBusy ? null : (
             <Pressable
+              {...webMark({ connect: "1" })}
               style={[styles.connect, styles.connectCompact]}
               onPress={() => void board.connect()}
             >
-              <Text style={styles.connectTxt}>Connect Arduino</Text>
+              <Text {...webMark({ connectLabel: "1" })} style={styles.connectTxt}>Connect Arduino</Text>
             </Pressable>
           )
         ) : (

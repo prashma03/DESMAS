@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Image, Platform, Pressable, StyleSheet, Text, View, type ImageStyle, type ViewProps } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import type { EarthDelay } from "../findings";
 import { communicationAutonomy } from "../kit/autonomy";
@@ -16,7 +16,6 @@ import {
   FaultLog,
   GlassTag,
   KitReadout,
-  Legend,
   Lower,
   mono,
   Page,
@@ -31,6 +30,75 @@ import {
 } from "./dashboard";
 import { AllWorldsSpaceBackground } from "./AllWorldsSpaceBackground";
 import { SceneScanOverlay } from "./SceneScanOverlay";
+
+const MARS_MOBILE_STYLE_ID = "desmas-mars-mobile";
+
+/** Phone layout only. Desktop rules stay on the StyleSheet objects above 767px. */
+const MARS_MOBILE_CSS = `
+@media (max-width: 767px) {
+  [data-mars-page="1"] {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  [data-mars-scene="future"] {
+    aspect-ratio: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 64vw !important;
+    min-height: 248px !important;
+    max-height: 340px !important;
+    overflow: hidden !important;
+  }
+  [data-mars-scene="future"] [aria-label^="Mars future base"] > div {
+    background-size: cover !important;
+    background-position: 68% 62% !important;
+    background-repeat: no-repeat !important;
+  }
+  [data-mars-scene="future"] [data-scene-scan] {
+    overflow: hidden !important;
+    z-index: 1;
+    pointer-events: none;
+  }
+  [data-mars-phase="1"],
+  [data-mars-title="1"] {
+    z-index: 4;
+  }
+  [data-mars-widgets="1"] {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  [data-mars-widgets="1"] > * {
+    position: static !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    align-self: stretch !important;
+    height: auto !important;
+  }
+  [data-mars-widgets="1"] > *:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 339px) {
+  [data-mars-widgets="1"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+`;
+
+if (Platform.OS === "web" && typeof document !== "undefined" && !document.getElementById(MARS_MOBILE_STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = MARS_MOBILE_STYLE_ID;
+  style.textContent = MARS_MOBILE_CSS;
+  document.head.appendChild(style);
+}
+
+function marked(data: Record<string, string>): ViewProps {
+  return Platform.OS === "web" ? ({ dataSet: data } as ViewProps) : {};
+}
 
 const CLEAR = require("../../assets/mars/surface-clear.jpg");
 const STORM = require("../../assets/mars/surface-storm.jpg");
@@ -219,7 +287,8 @@ export function MarsPage({
   delay: EarthDelay | null;
   link?: LinkStatus;
 }) {
-  const { narrow } = useScreen();
+  const { width } = useScreen();
+  const phone = width < 768;
   const reduceMotion = useReducedMotion();
   const [orbitH, setOrbitH] = useState(0);
   const bob = useRef(new Animated.Value(0)).current;
@@ -267,7 +336,7 @@ export function MarsPage({
     : `Solar input ${solar}% · power conservation active`;
 
   return (
-    <View style={styles.screen}>
+    <View {...marked({ marsPage: "1" })} style={styles.screen}>
       <AllWorldsSpaceBackground />
       <View style={styles.sheet}>
     <Page>
@@ -286,7 +355,7 @@ export function MarsPage({
         <View style={styles.ship}>
           <RelayCraft bob={bob} />
         </View>
-        {narrow ? null : (
+        {phone ? null : (
           <>
             <GlassTag title="Relay ship" line="FIXES ITS OWN FAULTS" color={colors.green} style={styles.shipTag} />
             <GlassTag title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} style={styles.baseTag} />
@@ -301,24 +370,30 @@ export function MarsPage({
           </>
         )}
         <DayBadge label={`Dust storm · ${storm}`} tone={reading.dark >= 55 ? "alert" : thick ? "watch" : "ok"} />
-        <SceneTitle kicker="03 · Mars · next" title="Relay ship and future base" style={narrow ? undefined : { maxWidth: "52%" }} />
+        <SceneTitle
+          kicker="03 · Mars · next"
+          title="Relay ship and future base"
+          fullBleed={phone ? false : undefined}
+          titleStyle={phone ? styles.orbitTitleTextPhone : undefined}
+          style={phone ? styles.orbitTitlePhone : { maxWidth: "52%" }}
+        />
       </View>
-      {narrow ? (
+      {phone ? (
         <>
-          <Legend>
-            <GlassTag inline title="Relay ship" line="FIXES ITS OWN FAULTS" color={colors.green} />
-            <GlassTag inline title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} />
-            <GlassTag inline title="Earth link" line={linkLine.replace("Earth · ", "")} color="#FFC59E" />
-          </Legend>
+          <View {...marked({ marsWidgets: "1" })} style={styles.widgetGrid}>
+            <GlassTag inline wrap title="Relay ship" line="FIXES ITS OWN FAULTS" color={colors.green} />
+            <GlassTag inline wrap title="Future base" line={`Solar ${solar}% · ${onCount} of 4 on`} color={colors.ok} />
+            <GlassTag inline wrap title="Earth link" line={linkLine.replace("Earth · ", "")} color="#FFC59E" />
+          </View>
           <View style={styles.stormInline}>
             <Text style={styles.kicker}>Dust storm · from the light sensor</Text>
-            <Text style={styles.stormVal}>{`${Math.round(reading.dark)}%  ${storm}`}</Text>
+            <Text style={[styles.stormVal, styles.stormValPhone]}>{`${Math.round(reading.dark)}%  ${storm}`}</Text>
             <Text style={styles.note}>Cover the light sensor to thicken the storm. The base sheds power the same way it does in a lunar night.</Text>
           </View>
         </>
       ) : null}
 
-      <View style={styles.scene}>
+      <View {...marked({ marsScene: "future" })} style={styles.scene}>
         <Image source={CLEAR} style={styles.photo} resizeMode="stretch" accessibilityLabel="Mars future base under a clear sky" />
         <Image
           source={STORM}
@@ -327,20 +402,20 @@ export function MarsPage({
           accessibilityLabel="Mars future base in a dust storm"
         />
         <SceneScanOverlay tone="mars" />
-        <View style={styles.phaseRow}>
-          <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm]}>
-            <Text style={[styles.pillTxt, { color: clearSky ? colors.ok : "#E7B08A" }]}>{phase}</Text>
+        <View {...marked({ marsPhase: "1" })} style={[styles.phaseRow, phone ? styles.phaseRowPhone : null]}>
+          <View style={[styles.pill, clearSky ? styles.pillClear : styles.pillStorm, phone ? styles.pillPhone : null]}>
+            <Text style={[styles.pillTxt, phone ? styles.pillTxtPhone : null, { color: clearSky ? colors.ok : "#E7B08A" }]}>{phase}</Text>
           </View>
-          <View style={styles.pill}>
-            <Text style={styles.pillDetail} numberOfLines={2}>{phaseDetail}</Text>
+          <View style={[styles.pill, phone ? styles.pillPhone : null]}>
+            <Text style={[styles.pillDetail, phone ? styles.pillTxtPhone : null]} numberOfLines={2}>{phaseDetail}</Text>
           </View>
         </View>
-        {narrow ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
-        <View style={[styles.titleCard, narrow ? styles.titleCardNarrow : null]}>
-          <Text style={styles.warmKicker}>03 · Mars · surface · crewed</Text>
-          <Text style={[styles.title, narrow ? { fontSize: 26 } : null]}>Future base</Text>
+        {phone ? null : tags.map((tag) => <GlassTag key={tag.title} title={tag.title} line={tag.line} color={tag.color} on={tag.on} style={tag.style} />)}
+        <View {...marked({ marsTitle: "1" })} style={[styles.titleCard, phone ? styles.titleCardNarrow : null]}>
+          <Text style={[styles.warmKicker, phone ? styles.kickerPhone : null]}>03 · Mars · surface · crewed</Text>
+          <Text style={[styles.title, phone ? styles.titlePhone : null]}>Future base</Text>
         </View>
-        {narrow ? null : (
+        {phone ? null : (
           <View style={styles.advice}>
             <Text style={styles.warmKicker}>The AI advises this crew</Text>
             <Text style={styles.adviceTxt}>{ADVICE}</Text>
@@ -357,13 +432,13 @@ export function MarsPage({
           </View>
         )}
       </View>
-      {narrow ? (
+      {phone ? (
         <>
-          <Legend>
+          <View {...marked({ marsWidgets: "1" })} style={styles.widgetGrid}>
             {tags.map((tag) => (
-              <GlassTag key={tag.title} inline title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
+              <GlassTag key={tag.title} inline wrap title={tag.title} line={tag.line} color={tag.color} on={tag.on} />
             ))}
-          </Legend>
+          </View>
           <View style={styles.adviceInline}>
             <Text style={styles.warmKicker}>The AI advises this crew</Text>
             <Text style={styles.adviceTxt}>{ADVICE}</Text>
@@ -509,7 +584,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(196,96,58,0.45)",
   },
-  titleCardNarrow: { left: 12, right: 12, bottom: 12, maxWidth: "70%" },
+  titleCardNarrow: { left: 10, bottom: 10, maxWidth: "74%", paddingHorizontal: 12, paddingVertical: 8 },
+  phaseRowPhone: { top: 10, left: 10, right: 10, maxWidth: "100%", flexDirection: "column", alignItems: "flex-start", gap: 6 },
+  pillPhone: { maxWidth: "100%", flexShrink: 1 },
+  pillTxtPhone: { flexShrink: 1, ...(Platform.OS === "web" ? ({ overflowWrap: "break-word" } as object) : null) },
+  kickerPhone: { fontSize: 10, letterSpacing: 0.7 },
+  titlePhone: { fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
+  orbitTitlePhone: { left: 12, bottom: 12, maxWidth: "86%", paddingHorizontal: 12, paddingVertical: 8 },
+  orbitTitleTextPhone: { fontSize: 22, lineHeight: 26 },
+  stormValPhone: { fontSize: 26 },
+  widgetGrid: { width: "100%", maxWidth: "100%", flexDirection: "row", flexWrap: "wrap", gap: 8 },
   warmKicker: { color: "#E7B08A", fontFamily: mono, fontSize: 11, letterSpacing: 1.1, textTransform: "uppercase" },
   title: { color: colors.ink, fontSize: 34, fontWeight: "300", letterSpacing: -0.6, marginTop: 2 },
   advice: {
