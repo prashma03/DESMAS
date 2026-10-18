@@ -10,7 +10,7 @@ export function useDiagnosis(world: WorldKey, reading: KitReading): { finding: F
   const [answer, setAnswer] = useState<{ key: string; finding: Finding } | null>(null);
 
   useEffect(() => {
-    if (process.env.EXPO_PUBLIC_AUTO_DIAGNOSE !== "1") return;
+    if (!API || process.env.EXPO_PUBLIC_AUTO_DIAGNOSE !== "1") return;
     const ctrl = new AbortController();
     const snapshot = reading;
     const timer = setTimeout(async () => {

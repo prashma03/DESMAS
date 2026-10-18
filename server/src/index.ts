@@ -1,10 +1,13 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import { fileURLToPath } from "node:url";
 import { diagnose } from "./diagnose.js";
 import { askGrok } from "./grok.js";
+import { listenHost, originAllowed, tokenTtlSeconds } from "./httpConfig.js";
 import { marsDelay } from "./horizons.js";
+import { allowPaidRoute } from "./limits.js";
 import { earthPowerScenario, marsTauScenario } from "./scenarios.js";
 import { communicationAutonomy } from "../../src/kit/autonomy.js";
 import {
@@ -20,19 +23,11 @@ dotenv.config({ path: new URL("../../.env", import.meta.url) });
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
+const host = listenHost();
 const XAI_TTS = "https://api.x.ai/v1/tts";
-const TTS_MAX_CHARS = 4000;
+const TTS_MAX_CHARS = 800;
 
-const hostedOrigins = (process.env.CORS_ORIGINS ?? "https://prashma03.github.io")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-function originAllowed(origin: string | undefined) {
-  if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-  return hostedOrigins.includes(origin);
-}
-
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: (origin, cb) => {
@@ -46,7 +41,21 @@ app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 const XAI_CHAT = "https://api.x.ai/v1/chat/completions";
 const XAI_CLIENT_SECRETS = "https://api.x.ai/v1/realtime/client_secrets";
 const CHAT_MODEL = process.env.GROK_CHAT_MODEL?.trim() || "grok-4.7";
-const TOKEN_TTL_SEC = 300;
+const TOKEN_TTL_SEC = tokenTtlSeconds();
+
+function paid(route: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (allowPaidRoute(route, req.ip ?? "unknown")) {
+      next();
+      return;
+    }
+    res.setHeader("Retry-After", "60");
+    res.status(429).json({
+      error: "rate_limited",
+      message: "Too many requests to the voice API. Wait and try again.",
+    });
+  };
+}
 
 function ttsConfigured() {
   return Boolean(process.env.XAI_API_KEY?.trim());
@@ -108,7 +117,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.post("/api/realtime/token", async (_req, res) => {
+app.post("/api/realtime/token", paid("token"), async (_req, res) => {
   const key = process.env.XAI_API_KEY?.trim();
   if (!key) {
     res.status(503).json({ error: "realtime_unconfigured" });
@@ -153,8 +162,8 @@ type ChatMsg = {
   tool_call_id?: string;
 };
 
-app.post("/api/chat", async (req, res) => {
-  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+app.post("/api/chat", paid("chat"), async (req, res) => {
+  const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 500) : "";
   const world = req.body?.world;
   if (!text) {
     res.status(400).json({ error: "text_required" });
@@ -245,7 +254,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.post("/api/tts", async (req, res) => {
+app.post("/api/tts", paid("tts"), async (req, res) => {
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text) {
     res.status(400).json({ error: "text_required" });
@@ -319,11 +328,11 @@ app.get("/api/scenarios/mars", async (_req, res) => {
   }
 });
 
-app.post("/api/diagnose", (req, res) => {
+app.post("/api/diagnose", paid("diagnose"), (req, res) => {
   void diagnose(req, res);
 });
 
-app.post("/api/grok", async (req, res) => {
+app.post("/api/grok", paid("grok"), async (req, res) => {
   const question = typeof req.body?.question === "string" ? req.body.question.trim().slice(0, 500) : "";
   const world =
     req.body?.world === "earth" || req.body?.world === "moon" || req.body?.world === "mars"
@@ -344,6 +353,6 @@ app.post("/api/grok", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`DESMAS server http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`DESMAS server http://${host}:${port}`);
 });

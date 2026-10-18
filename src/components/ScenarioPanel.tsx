@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { API } from "../api";
+import { API, API_UNAVAILABLE } from "../api";
 import { isMarsTauScenario, type MarsTauScenario, type MarsTauSample } from "../sim/marsTau";
 import { isEarthPowerScenario, type EarthPowerScenario } from "../sim/powerDay";
 import { colors } from "../theme";
@@ -48,6 +48,10 @@ export function ScenarioPanel() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
+    if (!API) {
+      setError(API_UNAVAILABLE);
+      return;
+    }
     const ctrl = new AbortController();
     fetch(`${API}/api/scenarios/earth`, { signal: ctrl.signal })
       .then(async (res) => {
@@ -156,6 +160,10 @@ export function MarsScenarioPanel() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
+    if (!API) {
+      setError(API_UNAVAILABLE);
+      return;
+    }
     const ctrl = new AbortController();
     fetch(`${API}/api/scenarios/mars`, { signal: ctrl.signal })
       .then(async (res) => {

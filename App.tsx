@@ -148,6 +148,7 @@ export default function App() {
   useEffect(() => {
     let stop = false;
     const load = () => {
+      if (!API) return;
       fetch(`${API}/api/mars-delay`)
         .then((r) => r.json())
         .then((d: { oneWayMin?: number; roundTripMin?: number; oneWaySeconds?: number; au?: number }) => {

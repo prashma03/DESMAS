@@ -1,9 +1,8 @@
+import { API } from "../api";
 import { kitStore } from "../kit/store";
 import { offlineCrewAnswer } from "../kit/sensorState";
 import type { WorldId } from "../kit/types";
 import { speakAlert } from "../speakAlert";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8787";
 
 type World = Exclude<WorldId, "all">;
 
@@ -16,6 +15,9 @@ export async function askTypedQuestion(
   const clipped = text.trim().slice(0, 2000);
   if (!clipped) throw new Error("empty");
   const { reading } = kitStore.getSnapshot();
+  if (!API) {
+    return { source: "offline", answer: offlineCrewAnswer(world, reading, clipped), spoken: "none" };
+  }
 
   try {
     const res = await fetch(`${API}/api/chat`, {

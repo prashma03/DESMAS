@@ -9,11 +9,11 @@ import {
 } from "../kit/sensorState";
 import { communicationAutonomy, publishedMarsDelay } from "../kit/autonomy";
 import { setGrokPlaybackBusy } from "./playbackGate";
-import { voiceNetworkError } from "./voiceEndpoint";
+import { API } from "../api";
+import { voiceNetworkError, voiceUnavailableMessage } from "./voiceEndpoint";
 import type { WorldId } from "../kit/types";
 import { floatToPcm16Base64, resampleF32, TARGET_RATE } from "./pcm";
 
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8787";
 const REALTIME_URL = "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
 
 export type VoiceStatus =
@@ -86,6 +86,7 @@ function isWeb() {
 }
 
 async function mintToken(): Promise<string> {
+  if (!API) throw new Error(voiceUnavailableMessage());
   const url = `${API}/api/realtime/token`;
   const pageOrigin = typeof location !== "undefined" ? location.origin : "";
   let res: Response;

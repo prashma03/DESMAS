@@ -34,6 +34,9 @@ jobs:
         run: npm ci
 
       - name: Export Expo web app
+        env:
+          # Public API address, not a secret. Leave unset until the HTTPS server exists.
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
         run: npm run export:web
 
       - name: Keep underscore asset folders

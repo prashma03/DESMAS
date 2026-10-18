@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { WorldId } from "../kit/types";
 import { colors } from "../theme";
+import { API } from "../api";
 import { askTypedQuestion } from "../grokVoice/chatFallback";
 import { PushToTalk, type VoiceStatus } from "../grokVoice/pushToTalk";
+import { voiceUnavailableMessage } from "../grokVoice/voiceEndpoint";
 import { mono, sans } from "./dashboard";
 
 type World = Exclude<WorldId, "all">;
@@ -24,7 +26,7 @@ function statusLabel(s: VoiceStatus) {
 export function VoiceTalk({ world }: { world: World }) {
   const session = useRef<PushToTalk | null>(null);
   const [status, setStatus] = useState<VoiceStatus>("idle");
-  const [detail, setDetail] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(API ? null : voiceUnavailableMessage());
   const [userText, setUserText] = useState("");
   const [assistantText, setAssistantText] = useState("");
   const [typed, setTyped] = useState("");

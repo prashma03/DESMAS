@@ -1,0 +1,19 @@
+# Render Blueprint for the Express API. The xAI key is entered in the Render dashboard
+# and is not stored in this file. GitHub Pages remains a separate static site.
+services:
+  - type: web
+    name: desmas-api
+    runtime: node
+    branch: public-voice-render
+    buildCommand: npm ci
+    startCommand: npm run start -w server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: XAI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://prashma03.github.io
+      - key: TOKEN_TTL_SEC
+        value: "120"

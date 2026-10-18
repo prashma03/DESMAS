@@ -1,4 +1,4 @@
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8787";
+import { API } from "./api";
 const TTS_MAX_CHARS = 4000;
 
 type SpeechWin = {
@@ -54,6 +54,10 @@ export type SpeakSource = "grok" | "browser";
 export async function speakAlert(text: string): Promise<SpeakSource> {
   const clipped = text.trim().slice(0, TTS_MAX_CHARS);
   if (!clipped) throw new Error("empty");
+  if (!API) {
+    if (speakBrowser(clipped)) return "browser";
+    throw new Error("speech_unavailable");
+  }
 
   try {
     const res = await fetch(`${API}/api/tts`, {

@@ -1,3 +1,8 @@
+/** Shown when a public build has no API address. It must not call localhost. */
+export function voiceUnavailableMessage(): string {
+  return "Voice is unavailable on this public site. GitHub Pages does not run the voice server. Set EXPO_PUBLIC_API_URL to the HTTPS API and rebuild the site.";
+}
+
 /** Browser message when the voice token request never receives an HTTP response. */
 export function voiceNetworkError(url: string, pageOrigin: string, cause: string): string {
   const localApi = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url);

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { KitReading, KitSource, WorldId } from "../kit/types";
-import { API } from "../api";
+import { API, API_UNAVAILABLE } from "../api";
 import { fallbackAnswer, suggestedQuestions, type EarthDelay } from "../findings";
 import { useScreen } from "../layout";
 import { colors } from "../theme";
@@ -57,10 +57,7 @@ export function AiMonitor({
       ? { text: "Ready. Speak Alert reads the current finding out loud.", error: false }
       : { text: "Speech synthesis is not available in this browser.", error: true },
   );
-  const spokenAlarm = useRef(false);
   const line = `${info.title}. ${info.body}`;
-  const lineRef = useRef(line);
-  lineRef.current = line;
   const speak = () => {
     void speakGrokTts(line)
       .then((source) => {
@@ -76,14 +73,6 @@ export function AiMonitor({
     setVoice({ text: "Voice stopped.", error: false });
   };
 
-  useEffect(() => {
-    if (reading.alarm && !spokenAlarm.current) {
-      spokenAlarm.current = true;
-      speakAlert(lineRef.current, setVoice);
-    }
-    if (!reading.alarm) spokenAlarm.current = false;
-  }, [reading.alarm, world]);
-
   const ask = async (q: string) => {
     const text = q.trim();
     if (!text) {
@@ -96,6 +85,12 @@ export function AiMonitor({
     setDraft("");
     setLog((prev) => [{ q: text, a: "Asking Grok…" }, ...prev].slice(0, 4));
     const local = fallbackAnswer(world, text, reading, info, delay);
+    if (!API) {
+      setLog((prev) => [{ q: text, a: API_UNAVAILABLE }, ...prev.slice(1)].slice(0, 4));
+      setVia("fallback");
+      setPending(false);
+      return;
+    }
     try {
       const res = await fetch(`${API}/api/grok`, {
         method: "POST",

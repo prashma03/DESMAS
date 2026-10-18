@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { voiceNetworkError } from "./voiceEndpoint";
+import { voiceNetworkError, voiceUnavailableMessage } from "./voiceEndpoint";
+
+test("a public build without an API address says voice is unavailable", () => {
+  const message = voiceUnavailableMessage();
+  assert.match(message, /unavailable/);
+  assert.match(message, /EXPO_PUBLIC_API_URL/);
+  assert.doesNotMatch(message, /localhost/);
+});
 
 test("a public HTTPS page cannot use a localhost voice API", () => {
   const message = voiceNetworkError(
